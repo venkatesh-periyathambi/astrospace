@@ -1,7 +1,7 @@
 ---
 author: Venkatesh Periyathambi
 pubDatetime: 2026-05-16T10:00:00Z
-title: "Offloading reporting from Aurora PostgreSQL to Redshift with Zero-ETL: what you actually need to know"
+title: "Aurora to Redshift Zero-ETL: what actually replicates"
 slug: aurora-redshift-zero-etl
 featured: true
 draft: false
@@ -17,12 +17,13 @@ description: A practical look at Aurora PostgreSQL Zero-ETL into Redshift — ho
 
 If you're running reporting queries against your Aurora PostgreSQL read replicas and feeling the pinch — whether that's from contention with OLTP traffic, the cost of scaling replicas just to feed dashboards, or the fact that your "analytical" SQL was never really meant for a row store — Aurora PostgreSQL Zero-ETL integration with Redshift is probably on your shortlist.
 
-The pitch is great: near real-time replication into a columnar warehouse with no pipelines to write, no Glue jobs to babysit, no DMS task tuning. But once you start planning a real migration, the questions get interesting fast. Two of the ones I keep getting asked:
+The pitch is great: near real-time replication into a columnar warehouse with no pipelines to write, no Glue jobs to babysit, no DMS task tuning. But once you start planning a real migration, the questions get interesting fast. Three of the ones I keep getting asked:
 
 1. *What happens to my NOT NULL columns? PostgreSQL enforces them strictly — does Redshift?*
 2. *What about indexes and performance? Half my Aurora schema is held together by indexes and foreign keys.*
+3. *What happens when replication retries — could I end up with duplicates, given Redshift doesn't enforce uniqueness?*
 
-Let's go through both.
+Let's go through all three.
 
 ## Table of contents
 
@@ -66,7 +67,7 @@ Since Aurora enforces the constraint and you can't modify the replicated table a
 - **`serial` / `bigserial` / `smallserial`** map to `INTEGER` / `BIGINT` / `SMALLINT` on Redshift. Values replicate; auto-increment does not (which is fine — Aurora generates them before replication).
 - **`ALTER TABLE ... ADD COLUMN NOT NULL`** on Aurora is replication-safe by construction: Aurora itself won't let you add a NOT NULL column without a default to a non-empty table, so any change that succeeds on the source is fine for replication.
 - **Custom types and extension types are not supported.** Tables using them won't replicate at all — the NOT NULL question becomes moot because the table simply isn't there.
-- **VARCHAR overflow.** Redshift `VARCHAR` caps at 65,535 bytes. A row that exceeds this puts the table into a `Failed` state. Set the database parameter `TRUNCATECOLUMNS=TRUE` to truncate-and-load instead of failing. NOT NULL still holds (a truncated string is non-null), but it's a constraint-adjacent failure mode that's easy to miss.
+- **VARCHAR overflow.** Redshift `VARCHAR` caps at 65,535 bytes. A row that exceeds this puts the table into a failed state and replication on it stops. To avoid this, set the database parameter `TRUNCATECOLUMNS=TRUE` to truncate-and-load instead of failing. NOT NULL still holds (a truncated string is non-null), but it's a constraint-adjacent failure mode that's easy to miss.
 
 ---
 
@@ -144,7 +145,7 @@ The replication stream is checkpointed against Aurora's WAL position (LSN). If t
 **2. Table-level resync (`ResyncRequired` state)**
 Certain operations on the source — adding a column in a specific position, adding a column with `DEFAULT CURRENT_TIMESTAMP`, multi-operation `ALTER TABLE` — put a single table into `ResyncRequired`. The integration doesn't append; it **fully reloads that table from source**. While the resync is happening, the table is unavailable for queries (unless you set `QUERY_ALL_STATES=TRUE`). When it finishes, you have a fresh, consistent copy. No duplicates, by construction — the old data was dropped first.
 
-**3. Integration-level failure (`Failed` state / `Needs attention`)**
+**3. Integration-level failure (`FAILED` state / `Needs attention`)**
 This happens when the integration itself can't proceed: tracked changes between source and target diverged, authorization broke, or the source was deleted. AWS's prescribed fix for several of these is "delete the integration and create a new one" — which fully re-initializes the pipeline. Again, full reload, not append. No duplicates.
 
 ### So where could duplicates actually sneak in?
@@ -152,7 +153,7 @@ This happens when the integration itself can't proceed: tracked changes between 
 In the steady-state Zero-ETL flow, they shouldn't — assuming a real primary key. The places to actually watch out:
 
 - **A "primary key" that isn't really unique.** If you used a synthetic PK or a non-unique index that happens to be marked unique on a poorly-modeled source table, the upstream uniqueness assumption breaks and weird things can happen on resync. The fix is upstream: make sure PKs are actually unique in Aurora.
-- **History mode is on.** If you've enabled history mode for a table, *every change* produces a new versioned row (with `_record_is_active` and `_record_delete_time` columns). That's not a bug — it's the feature working — but if you're not expecting it, the table will look "full of duplicates" because you're seeing every historical version, not just current state. Filter by `_record_is_active = true` (or just use plain mode) for current-state queries.
+- **History mode is on.** If you've enabled history mode for a table, *every change* produces a new versioned row (with `_record_is_active`, `_record_create_time`, and `_record_delete_time` columns). That's not a bug — it's the feature working — but if you're not expecting it, the table will look "full of duplicates" because you're seeing every historical version, not just current state. Filter by `_record_is_active = true` (or just use plain mode) for current-state queries.
 - **Your curated downstream layer.** Zero-ETL gives you a clean replicated table. The duplicate risk re-enters the picture in *your* CTAS/insert pipelines on top of the replica. If your `INSERT INTO reporting.fact SELECT ...` runs twice, Redshift will happily insert the rows twice — because, as you correctly noted, **PK and UNIQUE in Redshift are not enforced**. Idempotency in your curated layer is your problem to solve. Common patterns:
   - `MERGE INTO` (Redshift supports this) keyed on a stable identifier.
   - Stage → swap: load into a staging table, then `BEGIN; DELETE FROM target WHERE …; INSERT INTO target SELECT … FROM staging; COMMIT;`.
