@@ -1,6 +1,6 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-05-18T21:00:00Z
+pubDatetime: 2025-03-26T10:00:00Z
 title: "Troubleshooting Data Dictionary Issues in MySQL and Aurora"
 slug: troubleshooting-data-dictionary-issues-mysql-aurora
 featured: true
