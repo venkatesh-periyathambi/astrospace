@@ -1,6 +1,6 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-05-14T10:00:00Z
+pubDatetime: 1988-01-01T00:00:00Z
 title: Hello, I'm Venki — and welcome to my notes
 slug: hello-from-venki
 featured: true
