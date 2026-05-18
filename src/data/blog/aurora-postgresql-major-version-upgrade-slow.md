@@ -4,7 +4,7 @@ pubDatetime: 2025-09-27T10:00:00Z
 title: "Why Is My Aurora PostgreSQL Major Version Upgrade So Slow?"
 slug: aurora-postgresql-major-version-upgrade-slow
 featured: true
-draft: true
+draft: false
 tags:
   - postgres
   - aurora
