@@ -1,35 +1,36 @@
 ---
 author: Venkatesh Periyathambi
 pubDatetime: 2025-09-27T10:00:00Z
-title: "Why Is My Aurora PostgreSQL Major Version Upgrade So Slow?"
-slug: aurora-postgresql-major-version-upgrade-slow
+title: "Why Is My PostgreSQL Major Version Upgrade So Slow?"
+slug: postgresql-major-version-upgrade-slow
 featured: true
 draft: false
 tags:
   - postgres
   - aurora
   - aws
+  - rds
   - databases
   - troubleshooting
-description: "A deep dive into why Aurora PostgreSQL major version upgrades take longer than expected — what actually happens under the hood, why parallelism won't save you, and how to diagnose the bottleneck."
+description: "A deep dive into why PostgreSQL major version upgrades take longer than expected — what actually happens under the hood, why parallelism won't save you, and how to diagnose the bottleneck. Applies to Aurora PostgreSQL, RDS PostgreSQL, and self-hosted."
 ---
 
 "We upgraded a 2.8 TB database in 1.5 hours. But this other cluster — same size — took over 6 hours. What's going on?"
 
-I've heard variations of this question more times than I can count. Teams assume database size is the primary factor in upgrade duration. It's not. Let me explain what actually drives upgrade time in Aurora PostgreSQL, and what you can do about it.
+I've heard variations of this question more times than I can count. Teams assume database size is the primary factor in upgrade duration. It's not. Let me explain what actually drives upgrade time in PostgreSQL — whether you're running Aurora, RDS, or self-hosted — and what you can do about it.
 
 ## Table of Contents
 
 ## What Happens During a Major Version Upgrade
 
-Aurora PostgreSQL uses the `pg_upgrade` utility under the hood. Here's the simplified sequence:
+All PostgreSQL major version upgrades — whether on Aurora, RDS, or self-hosted — use the [`pg_upgrade`](https://www.postgresql.org/docs/current/pgupgrade.html) utility. The core process is the same everywhere:
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│           Aurora PostgreSQL Major Upgrade             │
+│           PostgreSQL Major Version Upgrade            │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
-│  1. Pre-upgrade snapshot                             │
+│  1. Pre-upgrade backup/snapshot                      │
 │  2. Shut down the cluster                            │
 │  3. Export and re-create users        (sequential)   │
 │  4. For EACH database in the cluster  (sequential):  │
@@ -37,12 +38,12 @@ Aurora PostgreSQL uses the `pg_upgrade` utility under the hood. Here's the simpl
 │     └─ pg_restore (schema)            (sequential)   │
 │  5. Link/copy data files                             │
 │  6. Post-upgrade tasks (ANALYZE, etc)                │
-│  7. Post-upgrade snapshot                            │
+│  7. Post-upgrade backup/snapshot                     │
 │                                                      │
 └──────────────────────────────────────────────────────┘
 ```
 
-The critical insight: **steps 3 and 4 are entirely sequential**. Every database is processed one at a time. Within each database, the schema dump and restore happen serially.
+The critical insight: **steps 3 and 4 are entirely sequential**. Every database is processed one at a time. Within each database, the schema dump and restore happen serially. This is a `pg_upgrade` design constraint — it's the same whether you're on a managed service or bare metal.
 
 ## Size Doesn't Matter — Object Count Does
 
@@ -50,7 +51,7 @@ This is the part that surprises people.
 
 A 2.8 TB database with 500 tables and minimal foreign keys can upgrade in 1.5 hours. A 200 GB database with 50,000 tables, thousands of foreign keys, complex views, and materialized views can take 6+ hours.
 
-Why? Because the upgrade isn't moving your data. Aurora's storage layer handles that through file linking. What takes time is **rebuilding the metadata** — every table definition, every index, every constraint, every view, every function, every trigger.
+Why? Because the upgrade isn't moving your data. On self-hosted PostgreSQL with `--link` mode, data files are hard-linked. On Aurora, the storage layer handles it transparently. On RDS, AWS manages the file operations internally. In all cases, what takes time is **rebuilding the metadata** — every table definition, every index, every constraint, every view, every function, every trigger.
 
 The formula is roughly:
 
@@ -70,7 +71,7 @@ This is the most common follow-up question. "Can we use the `-j` flag? Can we sc
 
 The short answer: **no, not for the metadata phase**.
 
-Here's why, based on how [`pg_upgrade`](https://www.postgresql.org/docs/current/pgupgrade.html) works internally:
+Here's why, based on how [`pg_upgrade`](https://www.postgresql.org/docs/current/pgupgrade.html) works internally (this applies to all PostgreSQL deployments — the utility is the same everywhere):
 
 **Schema extraction (`pg_dump --schema-only`) is inherently sequential.** It queries the old cluster's system catalogs and serializes the schema into a SQL script. There's no way to parallelize catalog reads that must produce a dependency-ordered output.
 
@@ -196,26 +197,39 @@ If your non-prod has the same object count as production and upgraded in one hou
 
 The most reliable way to estimate upgrade time:
 
-1. **Take an Aurora clone** of your production cluster (this is fast — it's copy-on-write)
-2. **Perform the upgrade** on the clone
+1. **Create a copy** of your production database
+2. **Perform the upgrade** on the copy
 3. **Measure the time**
 
-This gives you a realistic estimate because the clone has identical metadata, object counts, and data distribution.
+How you create that copy depends on your platform:
 
+**Aurora PostgreSQL** — use a fast clone (copy-on-write, takes seconds):
 ```bash
-# Create a clone
 aws rds restore-db-cluster-to-point-in-time \
   --source-db-cluster-identifier your-prod-cluster \
   --db-cluster-identifier upgrade-test-clone \
   --restore-type copy-on-write \
   --use-latest-restorable-time
-
-# After clone is available, modify to trigger upgrade
-aws rds modify-db-cluster \
-  --db-cluster-identifier upgrade-test-clone \
-  --engine-version 16.4 \
-  --apply-immediately
 ```
+
+**RDS PostgreSQL** — restore from a snapshot:
+```bash
+aws rds restore-db-instance-from-db-snapshot \
+  --db-instance-identifier upgrade-test \
+  --db-snapshot-identifier your-latest-snapshot
+```
+
+**Self-hosted** — use `pg_basebackup` or a filesystem snapshot, then run `pg_upgrade` with `--link` mode:
+```bash
+pg_upgrade \
+  --old-datadir /var/lib/postgresql/15/main \
+  --new-datadir /var/lib/postgresql/16/main \
+  --old-bindir /usr/lib/postgresql/15/bin \
+  --new-bindir /usr/lib/postgresql/16/bin \
+  --link
+```
+
+This gives you a realistic estimate because the copy has identical metadata, object counts, and data distribution.
 
 ## What You Can Actually Do to Speed Things Up
 
@@ -235,20 +249,24 @@ Since you can't parallelize the core metadata phase, focus on reducing what need
 
 **During the upgrade:**
 
-6. **Scale up the instance class.** While it won't help with parallelism, more memory and CPU can speed up the sequential catalog operations and constraint validation.
+6. **Scale up the instance class** (RDS/Aurora) or ensure adequate RAM (self-hosted). While it won't help with parallelism, more memory can speed up the sequential catalog operations and constraint validation.
 
-7. **Ensure no long-running transactions.** Open prepared transactions block the upgrade entirely.
+7. **Use `--jobs` for post-upgrade tasks** (self-hosted only). On self-hosted PostgreSQL, you have direct access to the `-j` flag which parallelizes post-upgrade `ANALYZE` and index rebuilds. On RDS/Aurora, this is managed internally.
+
+8. **Ensure no long-running transactions.** Open prepared transactions block the upgrade entirely.
 
 ## The Upgrade Progress Visibility Gap
 
-One of the most frustrating aspects of Aurora PostgreSQL major version upgrades is the lack of visibility. You initiate the upgrade and then... wait. There's no progress bar, no percentage complete, no indication of which phase you're in.
+One of the most frustrating aspects of PostgreSQL major version upgrades is the lack of visibility. On managed services (RDS/Aurora), you initiate the upgrade and then... wait. There's no progress bar, no percentage complete, no indication of which phase you're in.
 
-As of this writing, there's no built-in way to monitor upgrade progress in real time. The community has long asked for:
+On self-hosted, you at least have access to `pg_upgrade` logs in real time and can watch which database is being processed. But even there, you can't see progress within a single database's schema restore.
+
+As of this writing, there's no built-in way to monitor upgrade progress in real time on managed platforms. The community has long asked for:
 - Upgrade progress/status visibility
 - Increased parallelism in the metadata phase
 - Exposing the `-j` option for applicable phases
 
-Until these land, your best bet is to estimate duration upfront using the clone approach described above, and plan your maintenance window accordingly.
+Until these land, your best bet is to estimate duration upfront using the clone/copy approach described above, and plan your maintenance window accordingly.
 
 ## Key Takeaways
 
@@ -258,7 +276,7 @@ Until these land, your best bet is to estimate duration upfront using the clone 
 
 3. **The `-j` flag only helps post-upgrade tasks** like `ANALYZE` and index rebuilds — not the core schema migration.
 
-4. **Use Aurora clones to get realistic time estimates.** Don't guess based on data size.
+4. **Test on a copy of production to get realistic time estimates.** Use Aurora clones, RDS snapshot restores, or `pg_basebackup` — don't guess based on data size.
 
 5. **Reduce object count before upgrading** if upgrade time is critical. Drop unused objects, consolidate databases, clean up extensions.
 
@@ -266,7 +284,7 @@ Until these land, your best bet is to estimate duration upfront using the clone 
 
 ---
 
-*Based on real-world upgrade experiences across multiple Aurora PostgreSQL clusters of varying sizes and complexity.*
+*Based on real-world upgrade experiences across multiple PostgreSQL clusters — Aurora, RDS, and self-hosted — of varying sizes and complexity.*
 
 ## References
 
