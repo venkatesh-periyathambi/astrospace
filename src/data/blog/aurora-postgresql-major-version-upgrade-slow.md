@@ -70,7 +70,7 @@ This is the most common follow-up question. "Can we use the `-j` flag? Can we sc
 
 The short answer: **no, not for the metadata phase**.
 
-Here's why, based on how `pg_upgrade` works internally:
+Here's why, based on how [`pg_upgrade`](https://www.postgresql.org/docs/current/pgupgrade.html) works internally:
 
 **Schema extraction (`pg_dump --schema-only`) is inherently sequential.** It queries the old cluster's system catalogs and serializes the schema into a SQL script. There's no way to parallelize catalog reads that must produce a dependency-ordered output.
 
@@ -202,3 +202,17 @@ Until these land, your best bet is to estimate duration upfront using the clone 
 ---
 
 *Based on real-world upgrade experiences across multiple Aurora PostgreSQL clusters of varying sizes and complexity.*
+
+## References
+
+1. PostgreSQL Global Development Group, 'pg_upgrade', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/pgupgrade.html](https://www.postgresql.org/docs/current/pgupgrade.html) (accessed 27 September 2025).
+
+2. PostgreSQL Global Development Group, 'pg_upgrade source code (version.c)', *GitHub*, available at: [https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c](https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c) (accessed 27 September 2025).
+
+3. Amazon Web Services, 'Performing a major version upgrade', *Amazon Aurora User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html) (accessed 27 September 2025).
+
+4. Amazon Web Services, 'Upgrading Amazon Aurora PostgreSQL DB clusters', *Amazon Aurora User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html) (accessed 27 September 2025).
+
+5. AWS Labs, 'pg-collector', *GitHub*, available at: [https://github.com/awslabs/pg-collector](https://github.com/awslabs/pg-collector) (accessed 27 September 2025).
+
+6. Amazon Web Services, 'Minimize downtime for RDS PostgreSQL major version upgrades', *AWS re:Post Knowledge Center*, available at: [https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade](https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade) (accessed 27 September 2025).
