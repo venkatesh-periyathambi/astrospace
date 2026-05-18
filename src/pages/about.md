@@ -13,3 +13,7 @@ This blog is where I share practical insights, deep dives, and things I wish som
 
 - GitHub: [venkatesh-periyathambi](https://github.com/venkatesh-periyathambi)
 - Website: [venkinotes.com](https://venkinotes.com)
+
+## Disclaimer
+
+The views and opinions expressed on this blog are my own and do not represent the views of any company I currently work for or have worked for in the past.
