@@ -100,6 +100,71 @@ During `pg_restore`, foreign key constraint creation can be particularly expensi
 
 If your database has thousands of foreign keys across large tables, this single phase can dominate the entire upgrade time.
 
+## Large Objects, TOAST, and JSONB: The Other Bottleneck
+
+This is one people often miss. There's an important distinction between how PostgreSQL stores large data:
+
+**JSONB and BYTEA columns** use [TOAST](https://www.postgresql.org/docs/current/storage-toast.html) (The Oversized-Attribute Storage Technique). TOAST transparently compresses and slices large values into chunks stored alongside the table. During `pg_upgrade`, TOAST data is handled via file linking — the data files are linked or copied directly without being processed through `pg_dump`/`pg_restore`. So **JSONB and BYTEA columns stored via TOAST do not significantly impact upgrade time**.
+
+**Large Objects** (`lo_creat`, `pg_largeobject`) are a completely different story. These are stored in a dedicated system catalog table (`pg_largeobject`) and each object has metadata in `pg_largeobject_metadata`. During the upgrade:
+
+- `pg_dump` and `pg_restore` must process every large object's metadata
+- If you have millions of large objects, the memory consumption during dump/restore can cause the upgrade to either take extremely long or fail with an OOM (Out of Memory) condition
+- The OOM failure can happen silently — no error in the upgrade logs, just an abrupt termination
+
+```sql
+-- Check how many large objects you have
+SELECT COUNT(*) AS large_object_count FROM pg_largeobject_metadata;
+
+-- Check the total size of large objects
+SELECT pg_size_pretty(pg_total_relation_size('pg_largeobject'));
+```
+
+### Orphaned Large Objects: The Hidden Multiplier
+
+Large objects have a lifecycle: create (`lo_creat`), populate (`lo_put`), and delete (`lo_unlink`). The problem is that deleting a row that *references* a large object doesn't automatically delete the large object itself. This creates **orphaned large objects** — entries in `pg_largeobject` with no referencing row anywhere in your schema.
+
+Common causes of orphaned large objects:
+- Deleting rows without calling `lo_unlink()`
+- Dropping tables that stored large object OIDs
+- Updating rows that change a large object reference without unlinking the old one
+
+These orphans accumulate silently over time and can number in the millions. They all get processed during the upgrade even though they serve no purpose.
+
+**Detect orphaned large objects:**
+
+```bash
+# Dry run — shows what would be removed without deleting anything
+vacuumlo -v -n -h your-cluster-endpoint -p 5432 -U postgres your_database
+```
+
+**Remove orphaned large objects (before upgrading):**
+
+```bash
+# Actually remove orphaned large objects
+vacuumlo -v -h your-cluster-endpoint -p 5432 -U postgres your_database
+```
+
+**Prevent future orphans** by using the `lo_manage` trigger function:
+
+```sql
+-- Automatically unlinks large objects when rows are deleted or updated
+CREATE TRIGGER t_cleanup
+  BEFORE UPDATE OR DELETE ON your_table
+  FOR EACH ROW EXECUTE FUNCTION lo_manage(your_lo_column);
+```
+
+### The Bottom Line on Data Types and Upgrades
+
+| Storage Method | Stored In | Upgrade Impact |
+|---------------|-----------|---------------|
+| JSONB (inline/TOAST) | Table + TOAST table | Low — file linking, no dump/restore of data |
+| BYTEA (inline/TOAST) | Table + TOAST table | Low — same as JSONB |
+| Large Objects (`lo`) | `pg_largeobject` catalog | High — all metadata processed during dump/restore |
+| Orphaned Large Objects | `pg_largeobject` catalog | High — processed but serve no purpose |
+
+If your application uses the Large Object API (`lo_creat`, `lo_open`, `lo_write`), clean up orphans before upgrading. If you're using JSONB or BYTEA, you're fine — those won't slow your upgrade regardless of how large the values are.
+
 ## How to Diagnose Your Specific Bottleneck
 
 Before upgrading production, run the [pg-collector](https://github.com/awslabs/pg-collector) script on both your lower environment and production:
@@ -216,3 +281,11 @@ Until these land, your best bet is to estimate duration upfront using the clone 
 5. AWS Labs, 'pg-collector', *GitHub*, available at: [https://github.com/awslabs/pg-collector](https://github.com/awslabs/pg-collector) (accessed 27 September 2025).
 
 6. Amazon Web Services, 'Minimize downtime for RDS PostgreSQL major version upgrades', *AWS re:Post Knowledge Center*, available at: [https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade](https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade) (accessed 27 September 2025).
+
+7. Khera, B., 'Why do large objects lead to slowness or failure of major version upgrades in RDS/Aurora PostgreSQL?', *AWS re:Post*, available at: [https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ](https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ) (accessed 27 September 2025).
+
+8. Amazon Web Services, 'Managing high object counts in Amazon Aurora PostgreSQL', *Amazon Aurora User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html) (accessed 27 September 2025).
+
+9. PostgreSQL Global Development Group, 'TOAST (The Oversized-Attribute Storage Technique)', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/storage-toast.html](https://www.postgresql.org/docs/current/storage-toast.html) (accessed 27 September 2025).
+
+10. PostgreSQL Global Development Group, 'vacuumlo — remove orphaned large objects', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/vacuumlo.html](https://www.postgresql.org/docs/current/vacuumlo.html) (accessed 27 September 2025).
