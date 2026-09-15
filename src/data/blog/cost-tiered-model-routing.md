@@ -56,9 +56,9 @@ You're paying for compute, and several factors stack up.
 
 The dominant one is parameter count. Cost tracks how many parameters have to fire to produce each token. A frontier model runs hundreds of billions to trillions; a small model runs a fraction of that. Fewer parameters means fewer operations per token, which means less accelerator time, which means a lower price. Roughly linear, and it swamps everything else on this list.
 
-Then there's distillation. A large teacher model trains a small student to imitate its behaviour on a target distribution of tasks. The student keeps most of the everyday quality at a fraction of the size, and at inference time you pay for the student, not the teacher that produced it.
+Then there's distillation [8]. A large teacher model trains a small student to imitate its behaviour on a target distribution of tasks. The student keeps most of the everyday quality at a fraction of the size, and at inference time you pay for the student, not the teacher that produced it.
 
-Small models also fit on fewer and cheaper accelerators, and they batch better. A provider can pack far more concurrent requests onto the same hardware, which spreads the fixed cost over more billable tokens. Architectures like mixture-of-experts push the same way from the other direction: only a subset of parameters activates per token, so effective compute stays low even when total parameter count is large.
+Small models also fit on fewer and cheaper accelerators, and they batch better. A provider can pack far more concurrent requests onto the same hardware, which spreads the fixed cost over more billable tokens. Mixture-of-experts architectures [9] push the same way from the other direction: only a subset of parameters activates per token, so effective compute stays low even when total parameter count is large.
 
 Here's the part that matters for your architecture:
 
@@ -76,7 +76,7 @@ Six things are happening there, and only one of them is interesting.
 
 **The gateway** authenticates the caller, enforces a per-tenant quota, and tags every single call with a team, a use case, and a cost centre. Do this on day one. Retrofitting attribution onto a year of untagged traffic is miserable, and without it you cannot tell whether your bill went up because usage grew or because someone shipped a prompt that tripled in size.
 
-**Input checks** redact PII, screen for injection, and assemble the prompt with the static parts first so the cacheable prefix is as long as possible. Cache reads cost a fraction of fresh input tokens on every major platform, and this is free money that most teams leave on the floor.
+**Input checks** redact PII, screen for injection, and assemble the prompt with the static parts first so the cacheable prefix is as long as possible. Cache reads cost a fraction of fresh input tokens on every major platform [6] [7], and this is free money that most teams leave on the floor.
 
 **The router** scores how hard the request is and picks a tier. More on it below.
 
@@ -84,11 +84,37 @@ Six things are happening there, and only one of them is interesting.
 
 **The quality gate** decides whether the cheap answer was good enough to return. This is the load-bearing component.
 
-**Output checks and metering** do the grounding check, the output PII scan, and the schema validation, then emit tokens by tier, cache hit ratio, escalation rate, and latency percentiles. If you only instrument one thing, instrument escalation rate by tier.
+**Output checks and metering** do the grounding check, the output PII scan, and the schema validation, then emit tokens by tier, cache hit ratio, escalation rate, and latency percentiles. That escalation rate is the number that tells you whether any of this is working, and [it's the one I most often find nobody is watching](#where-this-goes-wrong).
+
+## How do you decide what goes where?
+
+This is the question everyone skips past, including most write-ups of this pattern. The routing mechanism is easy. Deciding that "extract the fields from this invoice" is safe for the small tier while "reconcile these two conflicting statements" isn't, that's the part you actually have to work out. Two answers, and you need both: a heuristic for day one, and a measurement for every day after.
+
+The heuristic is a question about the shape of the task, not about how hard it feels:
+
+| Ask this | If yes | Why |
+| --- | --- | --- |
+| Is the output space small and closed? Picking a label, filling a fixed schema, choosing a route. | Small tier | There's little room for a wrong answer to be subtly wrong. |
+| Can a cheap, non-model check tell you the answer is wrong? | Small tier | A validator turns a quality risk into a retry. |
+| Does it need several tool calls, or state carried across steps? | Frontier | Small models lose the thread partway through a chain, and each dropped step compounds. |
+| Does correctness rest on judgement nothing downstream can verify? | Mid or frontier | If you can't check it, you can't safely route it down. |
+
+That last row is the one that matters most and the one teams talk themselves out of. If you cannot write a check that catches a bad answer, you are not routing, you are gambling.
+
+The heuristic gets you a first draft of the mapping. Then you measure, and this is the real answer to the question:
+
+1. Pull a few hundred real requests per task type out of production logs. Not synthetic examples, and not the happy path your demo used.
+2. Decide what "good" means for that task type, concretely enough to compute. Exact match, schema validity, F1 against labelled fields, or a judge model scoring against a reference answer.
+3. Run the same sample through all three tiers and score every tier the same way.
+4. Route each task type to the cheapest tier that clears your quality bar, not the cheapest tier that mostly works. Set the bar before you see the results, otherwise you will negotiate with yourself.
+
+You end up with a table of task type against tier, backed by numbers you can show someone. That table is what the routing rules encode. Everything in the code snippet below is downstream of it.
+
+Two things worth saying about that exercise. First, it usually surprises people: the small tier clears the bar on more task types than anyone expects, and fails badly on one or two that everyone assumed were trivial. Second, the mapping has a shelf life. New model versions, a rewritten prompt, or a shift in the input distribution all move those numbers, so this is a job you re-run on a schedule rather than a decision you make once. I've left the mechanics of building the eval set and judging outputs to people who have written about it properly (see [1] and [2] in the references), because it's a discipline in its own right and it deserves more than a paragraph here.
 
 ## The router: three options, in order of effort
 
-**Start with your platform's managed router if it has one.** Several vendors now offer a serverless endpoint that predicts, per request, whether the small or the strong model in a family will produce an equivalent answer, and routes accordingly. Vendor benchmarks report savings in the 30 to 60 percent range with a small latency penalty. Treat those numbers as marketing until you've measured your own traffic, but the ops burden is close to zero, so it's the cheapest way to find out whether the pattern works for you at all. The usual constraints are that it's pairwise, same region, and within one model family.
+**Start with your platform's managed router if it has one.** Several vendors now offer a serverless endpoint that predicts, per request, whether the small or the strong model in a family will produce an equivalent answer, and routes accordingly [5]. The research behind it is public if you want to understand what the predictor is actually learning [4]. Vendor benchmarks report savings in the 30 to 60 percent range with a small latency penalty. Treat those numbers as marketing until you've measured your own traffic, but the ops burden is close to zero, so it's the cheapest way to find out whether the pattern works for you at all. The usual constraints are that it's pairwise, same region, and within one model family.
 
 **Then write rules.** Deterministic, free to run, and you can explain them to an auditor without hand-waving:
 
@@ -98,6 +124,7 @@ def route(req):
         return FRONTIER
     if req.input_tokens > 4000 or req.has_code_blocks:
         return MID
+    # this tuple is the output of the measurement above, not a guess
     if req.task_type in ("classify", "extract", "summarize_short"):
         return SMALL
     return MID  # when in doubt, don't be clever
@@ -150,10 +177,32 @@ My default: use the managed service. Self-host only when you have a hard require
 
 **Caching and routing fight each other.** Prompt caches are per model. If a similar request bounces between two models, you halve your hit rate on both. Route first, then cache within the tier, and don't route on anything that varies request to request when the prefix is otherwise identical.
 
-**Quality regression is silent.** Nothing pages you when the small tier gets 4 percent worse at an extraction task after a prompt change. Log a sample of small-tier outputs and run them through an offline evaluation on a schedule. Every platform has an evaluation service now, and it doesn't matter which you use as long as something is comparing tiers on a fixed test set.
+**Quality regression is silent.** Nothing pages you when the small tier gets 4 percent worse at an extraction task after a prompt change. Log a sample of small-tier outputs and re-run [the measurement](#how-do-you-decide-what-goes-where) against your fixed test set on a schedule. Every platform has an evaluation service now, and it doesn't matter which you use as long as something is comparing tiers on the same inputs over time.
 
 **Batch traffic shouldn't touch the router at all.** If it's asynchronous and tolerates a delay, send it to the batch endpoint at roughly half price and skip the tiering entirely. Routing is a real-time optimisation. I've seen a team run their nightly backfill through a latency-optimised routing path and pay double for work nobody was waiting on.
 
 ## The short version
 
-It's arithmetic. Small models are 10 to 60 times cheaper per token, so if you can safely send the routine 80 percent of your work to one and verify the answer before trusting it, your blended cost drops by roughly 80 percent while the hard cases still get the expensive model. The routing isn't the hard part. The check that makes aggressive routing safe is the hard part, and it's the part worth your best engineer.
+It's arithmetic. Small models are 10 to 60 times cheaper per token, so if you can safely send the routine 80 percent of your work to one and verify the answer before trusting it, your blended cost drops by roughly 80 percent while the hard cases still get the expensive model. The routing isn't the hard part. Working out which tier each task type belongs in, and writing the check that makes aggressive routing safe, those are the hard parts, and they're worth your best engineer.
+
+---
+
+## References
+
+1. Anthropic, 'Define success criteria and build evaluations', *Claude Platform Docs*, available at: [https://docs.claude.com/en/docs/test-and-evaluate/develop-tests](https://docs.claude.com/en/docs/test-and-evaluate/develop-tests) (accessed 15 September 2026).
+
+2. H. Husain, 'Your AI Product Needs Evals', *Hamel's Blog*, available at: [https://hamel.dev/blog/posts/evals/](https://hamel.dev/blog/posts/evals/) (accessed 15 September 2026).
+
+3. OpenAI, 'Evaluating model performance', *OpenAI Platform Documentation*, available at: [https://platform.openai.com/docs/guides/evals](https://platform.openai.com/docs/guides/evals) (accessed 15 September 2026).
+
+4. I. Ong et al., 'RouteLLM: Learning to Route LLMs with Preference Data', arXiv:2406.18665, available at: [https://arxiv.org/abs/2406.18665](https://arxiv.org/abs/2406.18665) (accessed 15 September 2026).
+
+5. Amazon Web Services, 'Understanding intelligent prompt routing in Amazon Bedrock', *Amazon Bedrock User Guide*, available at: [https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html) (accessed 15 September 2026).
+
+6. Anthropic, 'Prompt caching', *Claude Platform Docs*, available at: [https://docs.claude.com/en/docs/build-with-claude/prompt-caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching) (accessed 15 September 2026).
+
+7. Google Cloud, 'Context caching overview', *Vertex AI Generative AI Documentation*, available at: [https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview](https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview) (accessed 15 September 2026).
+
+8. G. Hinton, O. Vinyals and J. Dean, 'Distilling the Knowledge in a Neural Network', arXiv:1503.02531, available at: [https://arxiv.org/abs/1503.02531](https://arxiv.org/abs/1503.02531) (accessed 15 September 2026).
+
+9. N. Shazeer et al., 'Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer', arXiv:1701.06538, available at: [https://arxiv.org/abs/1701.06538](https://arxiv.org/abs/1701.06538) (accessed 15 September 2026).
