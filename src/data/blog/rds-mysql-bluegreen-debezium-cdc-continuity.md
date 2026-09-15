@@ -33,26 +33,13 @@ You do not need a re-snapshot. The awkward part is that the documentation does n
 
 ![Architecture: an RDS MySQL cluster with a writer and two replicas, Debezium reading binlog from Replica 2 and streaming into Amazon Redshift](@/assets/images/rds-bluegreen-debezium/01-architecture.svg)
 
-One writer and two replicas. One of those replicas is set up for CDC and Debezium connects to it. Three server settings have to be right, and Debezium's documentation is explicit about all three:
+One writer and two replicas. One of those replicas is set up for CDC — `log_bin = ON`, `binlog_format = ROW`, `binlog_row_image = FULL`, all per Debezium's docs — and Debezium connects to it. The connector tracks its position in the stream as a filename and an offset, something like `mysql-bin-changelog.000042` at position `985632`.
 
-- `log_bin = ON`
-- `binlog_format = ROW`
-- `binlog_row_image = FULL`
+Two of those three are the usual suspects. `binlog_row_image` is the one worth knowing about, because RDS defaults it to `FULL` and so nobody learns it exists until someone drops it to `MINIMAL` to save network bandwidth. Then the connector's `before` images contain nothing but the primary key, and your sink quietly writes nulls over columns that never changed.
 
-The third one is the one that gets forgotten. RDS defaults it to `FULL`, so most people never learn it exists — until someone sets it to `MINIMAL` to save network bandwidth and the connector starts emitting `before` images that contain nothing but the primary key. Your sink then writes nulls over columns that never changed, and it does it quietly.
+There is an RDS-specific trap too: **binlogs are only retained if automated backups are enabled**, and retention length is set through `mysql.rds_set_configuration('binlog retention hours', 48)` rather than a parameter group. Left at `NULL`, RDS purges binlogs whenever it likes, which turns any connector outage longer than a few minutes into a re-snapshot.
 
-There is an RDS-specific requirement too: **automated backups must be enabled**, or RDS retains no binlogs at all. Debezium's own MySQL docs call this out for RDS specifically. Retention length is separate again, and it is not a parameter-group setting — it lives behind a stored procedure:
-
-```sql
-CALL mysql.rds_set_configuration('binlog retention hours', 48);
-CALL mysql.rds_show_configuration;
-```
-
-Left at `NULL`, RDS purges binlogs whenever it likes, which turns any connector outage longer than a few minutes into a re-snapshot.
-
-With that in place, the connector tracks its position in the stream as a filename and an offset, something like `mysql-bin-changelog.000042` at position `985632`.
-
-If binary logging is off on that replica, the connector will not even start. Debezium runs `SHOW MASTER STATUS` during its snapshot, gets an empty result, and throws `Cannot read the binlog filename and position via 'SHOW MASTER STATUS'`. On RDS, `log_bin` is managed by AWS and defaults to off, so this catches people out regularly.
+If binary logging is off entirely, the connector will not even start. Debezium runs `SHOW MASTER STATUS` during its snapshot, gets an empty result, and throws `Cannot read the binlog filename and position via 'SHOW MASTER STATUS'`. On RDS, `log_bin` is managed by AWS and defaults to off, so this catches people out regularly.
 
 One forward-looking note, since the whole point here is a major version upgrade: MySQL 8.4 renames that statement to `SHOW BINARY LOG STATUS`. RDS supports 8.4. If 8.4 is your upgrade target, confirm your Debezium version handles the rename *before* you book the window — upgrading the database and then discovering the connector cannot read the server's binlog status is a bad afternoon.
 
@@ -66,11 +53,11 @@ RDS Blue/Green Deployments copy your whole environment into a staging area, upgr
 
 The topology is copied in full, so the writer and every replica get recreated on the green side without you doing anything. Parameter settings come across too, which means `log_bin = ON`, `binlog_format = ROW` and `binlog_row_image = FULL` are still in place on the green replica. Endpoints move with the switchover — in AWS's words, "RDS also renames the endpoints in the green environment to match the corresponding endpoints in the blue environment so that application changes aren't required." And the switchover itself takes seconds rather than hours.
 
-Be precise about what that endpoint promise covers, because it is narrower than people assume. A standard RDS for MySQL read replica is its own DB instance with its own instance endpoint; there is no aggregate reader endpoint to point a connector at. (Multi-AZ DB clusters have one, but Blue/Green does not support Multi-AZ DB clusters at all.) What you actually get is that the green replica inherits the blue replica's instance endpoint DNS name. That is enough — provided your connector re-resolves that name, which is a bigger proviso than it sounds. More on that below.
+Be precise about what that endpoint promise covers, though, because it is narrower than people assume. A standard RDS for MySQL read replica is its own DB instance with its own instance endpoint — there is no aggregate reader endpoint to point a connector at, Multi-AZ DB clusters being the exception that Blue/Green does not support anyway. What you get is the green replica inheriting the blue replica's endpoint DNS name, which is enough *provided your connector re-resolves that name*. Hold that thought.
 
 There is one catch, and it is the reason this post exists. Every instance in the green environment starts a fresh binlog sequence, so the file and position Debezium has stored no longer point at anything real.
 
-It is worth knowing how much worse this is for the managed alternatives, because that is the strongest argument for running your own connector. AWS documents flatly that "after you switch over, AWS Database Migration Service (AWS DMS) replication tasks can't resume because the checkpoint from the blue environment is invalid in the green environment. You must recreate the DMS task with a new checkpoint." No offset surgery on offer — you rebuild the task. And if you were reaching for Redshift zero-ETL instead, Blue/Green forbids it outright: "During switchover, the blue and green environments can't have zero-ETL integrations with Amazon Redshift. You must delete the integration first and switch over, then recreate the integration" — which means reseeding your target tables.
+Before fixing that, notice how much worse it is for the managed alternatives — this is the strongest argument for running your own connector. AWS says flatly that after switchover, "AWS Database Migration Service (AWS DMS) replication tasks can't resume because the checkpoint from the blue environment is invalid in the green environment. You must recreate the DMS task with a new checkpoint." And Blue/Green forbids Redshift zero-ETL outright: you must delete the integration before switching over and recreate it afterwards, which means reseeding your target tables.
 
 Debezium is the option where the checkpoint belongs to you and can be edited. That is the entire reason this situation is recoverable.
 
@@ -171,27 +158,13 @@ After the switchover the connector reconnects and asks for everything after GTID
 
 ### Turning GTID on without downtime
 
-On RDS you drive both settings through the DB parameter group. `gtid_mode` shows up in the console as `gtid-mode`, and it takes the four values MySQL defines: `OFF`, `OFF_PERMISSIVE`, `ON_PERMISSIVE`, `ON`. Check the Apply type column for your engine version and confirm it says dynamic before you assume no reboot is involved.
+MySQL documents the online enablement sequence and I am not going to retype it: you walk `enforce_gtid_consistency` from `WARN` to `ON`, then `gtid_mode` through `OFF_PERMISSIVE` and `ON_PERMISSIVE`, wait for anonymous transactions to drain, and finally set `ON`. Follow [the MySQL manual's version](https://dev.mysql.com/doc/refman/8.0/en/replication-mode-change-online-enable-gtids.html) step by step, because the order genuinely is not negotiable. On RDS you drive it through the DB parameter group, where `gtid_mode` appears as `gtid-mode`.
 
-Two RDS-specific problems with running MySQL's online procedure here, neither of which the MySQL manual can warn you about.
+Three things the MySQL manual cannot tell you, which is where the afternoon actually goes.
 
-First, your writer and its replicas almost certainly share one parameter group, so you cannot step them through the sequence independently — a change lands on all of them at once. That is survivable, because MySQL asks you to complete each step on every server before moving on, and simultaneous application satisfies that. But it removes your ability to stagger and to roll back one instance at a time. If you want that control, give the CDC replica its own parameter group first.
+Your writer and its replicas almost certainly share one parameter group, so you cannot step them independently — each change lands on all of them at once. That satisfies MySQL's requirement to finish each step everywhere before moving on, but it costs you the ability to stagger or to roll back one instance at a time. If you want that control, give the CDC replica its own parameter group first. And because RDS applies parameter changes asynchronously, "applied everywhere" is not something the console's status field will tell you reliably — verify each step with `SHOW GLOBAL VARIABLES LIKE 'gtid_mode';` against each instance individually.
 
-Second, RDS applies parameter changes asynchronously and per instance. "Applied on every instance" is not something the console's status field tells you reliably. Verify each step with `SHOW GLOBAL VARIABLES LIKE 'gtid_mode';` against each instance individually before moving on.
-
-The order of these steps is not negotiable. MySQL requires `enforce_gtid_consistency` to reach `ON` before `gtid_mode` starts moving, and skipping ahead can leave you with transactions that cannot be replicated.
-
-| Step | What you change | Move on when |
-| --- | --- | --- |
-| 1 | `enforce_gtid_consistency = WARN` | Your normal workload has run for a while and the error log shows no GTID consistency warnings. Fix any warnings before continuing. |
-| 2 | `enforce_gtid_consistency = ON` | Applied on every instance. |
-| 3 | `gtid_mode = OFF_PERMISSIVE` | Every instance has finished this step. None may move ahead early. |
-| 4 | `gtid_mode = ON_PERMISSIVE` | Every instance has finished this step. |
-| 5 | Nothing to change | `ONGOING_ANONYMOUS_TRANSACTION_COUNT` reads zero on each instance, and every anonymous transaction has replicated everywhere. |
-| 6 | Nothing to change | You no longer need any binlog that still holds pre-GTID transactions. Read the warning below before you skip this. |
-| 7 | `gtid_mode = ON` | Done. |
-
-Step 6 is the one that will bite a CDC pipeline, and it is missing from most guides. Once `gtid_mode` is `ON`, binlogs containing transactions without GTIDs can no longer be used. If Debezium is still reading an older binlog when you make that change, it stops dead and your only way out is a re-snapshot, which is the exact outcome you were trying to avoid. So before step 7, confirm the connector has caught up past every one of those older transactions.
+The step that bites CDC pipelines is the waiting one near the end, and it is missing from most write-ups. Before you make the final move to `ON`, you have to stop needing any binlog that still holds pre-GTID transactions — because once `gtid_mode` is `ON`, those binlogs can no longer be used. If Debezium is still reading one when you flip it, the connector stops dead and your only way out is the re-snapshot you were trying to avoid. Confirm the connector has read past every anonymous transaction before that last step, not after.
 
 There is nothing to switch on in the connector itself. Debezium picks up GTIDs automatically once the server reports `gtid_mode = ON` — its docs are explicit that GTIDs are "not required for a Debezium MySQL connector," meaning they are a server-side property the connector adapts to rather than a feature you turn on. You will find advice out there to set `"gtid.source.includes": ".*"`. Ignore it. That property is a *filter* over which source UUIDs to consider, its default is unset (meaning all of them), and `.*` is an elaborate way of writing the default.
 
@@ -209,7 +182,7 @@ In practice this only bites you if the connector has been down a while, because 
 
 You trigger the switchover, the connector loses its connection, and the replica's endpoint DNS name starts resolving to the green replica. The connector reconnects, sends its GTID set, and the green replica works out where to carry on from. CDC resumes without you editing anything.
 
-"Resumes on its own" does assume the connector retries rather than giving up. Switchover "drops connections to the DB instances in both environments and doesn't allow new connections" for its duration, so the binlog client *will* fail — under both options, not just this one. If your retry budget is shorter than the switchover takes, the task lands in `FAILED` and someone has to restart it by hand, which is not the same thing as automatic. Compare `errors.retry.timeout` and your binlog client's reconnect settings against the switchover timeout you configured (default 300 seconds, up to an hour).
+"Resumes on its own" does assume the connector retries rather than giving up. Switchover drops every connection and refuses new ones for its duration, so the binlog client *will* fail — under both options, not just this one. If your retry budget is shorter than the switchover takes, the task lands in `FAILED` and someone restarts it by hand, which is not the same as automatic. Check `errors.retry.timeout` against the switchover timeout you configured, which defaults to 300 seconds and can be set as high as an hour.
 
 ---
 
@@ -255,35 +228,17 @@ GTID removes the manual offset editing, which is where most mistakes happen. It 
 
 If this is a one-off upgrade, use Option A. Ten minutes of careful work and you are done. If it is a production pipeline you would rather not be paged about at 3am, spend an afternoon on GTID and stop thinking about binlog positions altogether.
 
-## Checklist
+## The five things people actually forget
 
-Before the switchover:
+Everything above is the reasoning. If you take only a screenshot from this post, take this — the items that are easy to skip and expensive to skip.
 
-- [ ] `log_bin = ON` on the CDC replica
-- [ ] `binlog_format = ROW` on the CDC replica
-- [ ] `binlog_row_image = FULL` on the CDC replica
-- [ ] Automated backups enabled — without them RDS keeps no binlogs at all
-- [ ] `binlog retention hours` set to something between 24 and 72 via `mysql.rds_set_configuration`, not left at NULL
-- [ ] Debezium pointed at the replica's instance endpoint DNS name, not an IP and not a pinned host
-- [ ] DNS TTL on the Connect workers down at 5 seconds, or a worker restart written into the runbook
-- [ ] Connector retry budget longer than your configured switchover timeout
-- [ ] Connector caught up at zero lag — required for both options, not just Option A
-- [ ] For GTID: `gtid_mode = ON` and `enforce_gtid_consistency = ON`, verified per instance
-- [ ] For GTID: the stored offset contains a `gtids` field
-- [ ] Note the connector's current offset somewhere outside Kafka, so you can compare later
-- [ ] Any Redshift zero-ETL integration on this instance deleted — Blue/Green blocks switchover otherwise
+1. **`binlog retention hours` is not a parameter group setting.** It is a stored procedure, it defaults to `NULL`, and `NULL` means RDS purges whenever it likes. Set it, then verify it again on the new production instance after switchover rather than assuming it came across.
+2. **Drain the connector to zero lag before you switch over.** Both options need this, not just Option A. GTID does not save you if the position you need is below green's `gtid_purged`.
+3. **Deal with DNS before the switchover, not after.** Either drop the Connect workers' TTL to 5 seconds or put a worker restart in the runbook. This is the one failure that reports itself as healthy.
+4. **Check the engine version, not the connector status.** `SELECT @@version` against whatever the connector resolved is the only cheap way to prove you are reading green and not the retained blue instance.
+5. **Delete any Redshift zero-ETL integration first.** Blue/Green refuses to switch over while one exists, and you will find out at the worst moment.
 
-After the switchover:
-
-- [ ] `SELECT @@version;` against the host the connector resolved returns the **new** engine version
-- [ ] `SHOW VARIABLES LIKE 'log_bin';` returns ON
-- [ ] `SHOW VARIABLES LIKE 'binlog_row_image';` returns FULL
-- [ ] `SHOW VARIABLES LIKE 'gtid_mode';` returns ON
-- [ ] `SELECT @@global.gtid_executed;` shows the full history, not a fresh set
-- [ ] `binlog retention hours` still set on the new production instance — verify it, do not assume it came across
-- [ ] Connector status is RUNNING
-- [ ] Lag is falling back towards zero
-- [ ] Redshift is receiving changes again
+And one that is not a checkbox so much as a habit: write the connector's current offset down somewhere outside Kafka before you start. It costs nothing and it is the only record you will have if the offsets topic surprises you.
 
 ## Proving you did not lose anything
 
