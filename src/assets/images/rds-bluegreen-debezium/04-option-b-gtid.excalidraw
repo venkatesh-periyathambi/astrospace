@@ -522,13 +522,13 @@
       "updated": 1716700000000,
       "link": null,
       "locked": false,
-      "text": "Zero manual steps. Same flow handles future failovers, upgrades, topology changes.",
+      "text": "No offset editing, and it handles future failovers too — if the connector is caught up.",
       "fontSize": 18,
       "fontFamily": 1,
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": null,
-      "originalText": "Zero manual steps. Same flow handles future failovers, upgrades, topology changes.",
+      "originalText": "No offset editing, and it handles future failovers too — if the connector is caught up.",
       "lineHeight": 1.25,
       "baseline": 16
     }

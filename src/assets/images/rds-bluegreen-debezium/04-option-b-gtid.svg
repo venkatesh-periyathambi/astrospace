@@ -26,5 +26,5 @@
   <path d="M 150,220 L 150,420 L 750,420 L 960,230" fill="none" stroke="#2f9e44" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="1.00" marker-end="url(#ah)"/>
   <text x="30" y="441" text-anchor="start" dominant-baseline="central" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" fill="#2f9e44" opacity="1.00">3. Debezium reconnects → sends GTID set → green auto-positions</text>
   <rect x="30" y="500" width="1040" height="70" rx="10" fill="#b2f2bb" fill-opacity="0.80" stroke="#2f9e44" stroke-width="2" stroke-opacity="0.80" stroke-dasharray="8 6"/>
-  <text x="550" y="526" text-anchor="middle" dominant-baseline="central" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" fill="#2f9e44" opacity="1.00">Zero manual steps. Same flow handles future failovers, upgrades, topology changes.</text>
+  <text x="550" y="526" text-anchor="middle" dominant-baseline="central" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" fill="#2f9e44" opacity="1.00">No offset editing, and it handles future failovers too — if the connector is caught up.</text>
 </svg>
