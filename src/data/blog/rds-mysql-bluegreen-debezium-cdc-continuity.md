@@ -1,6 +1,6 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-05-26T09:00:00Z
+pubDatetime: 2026-03-26T09:00:00Z
 modDatetime: 2026-09-15T16:00:00Z
 title: "RDS MySQL Blue/Green Upgrades: Don't Let Debezium Lose Its Place"
 slug: rds-mysql-bluegreen-debezium-cdc-continuity
@@ -297,14 +297,14 @@ Then count rows over the switchover window. Pick a table with a reliable modific
 -- on the MySQL source
 SELECT COUNT(*), MAX(updated_at)
 FROM   orders
-WHERE  updated_at >= '2026-05-26 09:00:00'
-AND    updated_at <  '2026-05-26 10:00:00';
+WHERE  updated_at >= '2026-03-26 09:00:00'
+AND    updated_at <  '2026-03-26 10:00:00';
 
 -- the same window in Redshift
 SELECT COUNT(*), MAX(updated_at)
 FROM   orders
-WHERE  updated_at >= '2026-05-26 09:00:00'
-AND    updated_at <  '2026-05-26 10:00:00';
+WHERE  updated_at >= '2026-03-26 09:00:00'
+AND    updated_at <  '2026-03-26 10:00:00';
 ```
 
 Matching counts across that window mean you came through clean. A short count on the target means you lost changes and need to backfill that window. Run this before you tell anyone the upgrade went fine.
