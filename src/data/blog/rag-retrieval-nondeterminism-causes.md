@@ -1,10 +1,10 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-10-06T09:00:00Z
+pubDatetime: 2026-03-03T09:00:00Z
 title: "Why Your RAG Search Returns Different Results Every Time (Part 1)"
 slug: rag-retrieval-nondeterminism-causes
 featured: false
-draft: true
+draft: false
 tags:
   - rag
   - vector-search

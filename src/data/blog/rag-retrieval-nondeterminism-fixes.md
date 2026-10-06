@@ -1,10 +1,10 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-10-06T09:05:00Z
+pubDatetime: 2026-03-24T09:00:00Z
 title: "Fixing Unstable RAG Retrieval (Part 2)"
 slug: rag-retrieval-nondeterminism-fixes
 featured: false
-draft: true
+draft: false
 tags:
   - rag
   - vector-search
