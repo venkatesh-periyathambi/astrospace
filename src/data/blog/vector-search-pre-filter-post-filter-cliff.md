@@ -16,11 +16,11 @@ description: "Why a metadata filter can make vector search suddenly slow or sile
 
 "Our vector search works fine until the user picks a tenant and a date range. Then it either gets slow or returns three results instead of ten."
 
-I have now heard some version of that sentence from four different teams. It always arrives in month two, right after the demo went well.
+I have now heard some version of that sentence from four different teams.
 
-Here is the setup. Vector search answers "which items are closest to this query?" A metadata filter answers "which items are allowed to participate?" Either question is easy on its own. Answering both at once, quickly, is where engines genuinely differ, and it is where most retrieval latency and recall problems actually come from.
+Vector search answers "which items are closest to this query?" A metadata filter answers "which items are allowed to participate?" Either question is easy on its own. Answering both at once, quickly, is where engines differ, and where most retrieval latency and recall problems come from.
 
-One bit of housekeeping first, because the vocabulary is a mess. In this post, **post-filtering** means you fetch vector candidates and then apply the predicate. **Pre-filtering** means you work out the eligible set first and only rank vectors inside it. Your engine might use those words the other way round. The underlying trade-off doesn't change.
+In this post, **post-filtering** means you fetch vector candidates and then apply the predicate. **Pre-filtering** means you work out the eligible set first and only rank vectors inside it. Your engine might use those words the other way round. The underlying trade-off doesn't change.
 
 ## Table of Contents
 
@@ -30,7 +30,7 @@ One bit of housekeeping first, because the vocabulary is a mess. In this post, *
 
 ![Two pipelines side by side. Post-filter: query vector, ANN search over the full index, top-M candidates, apply predicate, survivors, return top-K. Pre-filter: query vector, evaluate predicate, eligible ID set, rank vectors in set, scored matches, return top-K. The predicate step is highlighted in each](@/assets/images/vector-filter-cliff/01-two-plans.svg)
 
-The highlighted box is the only real difference, and everything downstream follows from it. Both plans are legitimate. Each one has a slice of the workload where it is clearly the right call, and a slice where it falls off a cliff.
+The highlighted box is the only difference that matters, and everything downstream follows from it. Each plan has a slice of the workload where it is the right call, and a slice where it falls off a cliff.
 
 ## The post-filter cliff: silent incompleteness
 
@@ -50,15 +50,15 @@ So you over-fetch, because that's the obvious lever. At a 1% pass rate you need 
 
 ![A chart of fill rate against local filter pass rate at a fixed over-fetch budget of ten times K. Fill rate holds at 100 percent from a 100 percent pass rate down to 10 percent, then drops sharply to about 30 percent at a 3 percent pass rate and under 10 percent below that, forming a knee rather than a gradual slope](@/assets/images/vector-filter-cliff/02-fill-rate-cliff.svg)
 
-Don't read the exact numbers too closely. The shape is the thing. A user narrowing a date range by one month is enough to walk your query from the flat part down to the floor.
+The shape is the thing, not the exact numbers. A user narrowing a date range by one month is enough to walk your query from the flat part down to the floor.
 
 > **Takeaway.** Post-filtering fails quietly. The query returns `200 OK` with two results in it and nothing anywhere says "incomplete". If you aren't measuring fill rate, you'll hear about this from a customer rather than a dashboard.
 
 ## The pre-filter cliff: the awkward middle
 
-Pre-filtering has much cleaner semantics. Work out the eligible set, then score only inside it. If the filter leaves 500 rows, scoring all 500 exactly is both quick and perfectly accurate. Small filtered sets are genuinely the easy case here, and exact search is the right answer for them.
+Pre-filtering has cleaner semantics. Work out the eligible set, then score only inside it. If the filter leaves 500 rows, scoring all 500 exactly is both quick and perfectly accurate. Small filtered sets are the easy case, and exact search is the right answer for them.
 
-The pain is in the middle: a set that's too big to brute-force cheaply, and too sparse for graph traversal to work properly.
+The pain is in the middle: a set that's too big to brute-force cheaply, and too sparse for graph traversal to work.
 
 Most ANN indexes are graphs, and traversal leans on neighbours as stepping stones. A vector that fails your filter can still be the only route to one that passes:
 
@@ -76,7 +76,7 @@ Global selectivity, as in "this filter matches 10% of the table", is the number 
 
 Same predicate. Same 10% global selectivity. Opposite behaviour.
 
-Metadata and embedding distance tend to be correlated, often quite strongly. A category that's rare across the whole corpus can form one tight semantic cluster and be trivial to search. A common one can be almost absent from a particular neighbourhood. That's why a planner working only from row counts will pick the wrong strategy, and why a benchmark built on random predicates tells you close to nothing about production.
+Metadata and embedding distance tend to be correlated, often strongly. A category that's rare across the whole corpus can form one tight semantic cluster and be trivial to search. A common one can be almost absent from a particular neighbourhood. That's why a planner working only from row counts will pick the wrong strategy, and why a benchmark built on random predicates tells you close to nothing about production.
 
 > **Takeaway.** Stop quoting global selectivity in design docs. Ask the other question instead: for the filters our users actually send, how many of the top few hundred neighbours survive?
 
@@ -114,7 +114,7 @@ The most common mistake I see is benchmarking an unfiltered index and assuming t
 - **Pass-rate buckets.** 100%, 10%, 1%, 0.1%. Report each one separately, never pooled.
 - **Correlated vs random predicates.** The gap between them is your correlation penalty.
 
-Then add tenant and category skew on top. A plan tuned on your biggest tenant often behaves very differently across a long tail of small ones, and that tail is usually most of your customers.
+Then add tenant and category skew on top. A plan tuned on your biggest tenant often behaves differently across a long tail of small ones, and that tail is usually most of your customers.
 
 ## The takeaway
 
@@ -124,7 +124,7 @@ Which means "does it support metadata filters?" is a weak question to ask a vend
 
 > How does the plan change as the eligible set shrinks and the local pass rate falls, and what does the engine do when it can't fill `K`?
 
-Measure fill rate, filtered recall, tail latency, and candidates examined across realistic filters, and the cliff stops being a mystery incident. It turns into a curve you can see, and plan around.
+Measure those things across the filters your users really send, and the cliff stops being a mystery incident. It turns into a curve you can see, and plan around.
 
 ---
 
