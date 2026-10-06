@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 316" width="1180" height="518" role="img">
+  <rect width="720" height="316" rx="12" fill="#ffffff" stroke="#dee2e6" stroke-width="1"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#212529">
+    <text x="190" y="30" text-anchor="middle" font-size="13" font-weight="700" fill="#c92a2a">sort by raw score</text>
+    <text x="530" y="30" text-anchor="middle" font-size="13" font-weight="700" fill="#1864ab">sort by (-round(score,6), doc_id)</text>
+
+    <rect x="40" y="44" width="300" height="196" rx="8" fill="#ffe3e3" fill-opacity="0.45" stroke="#e03131" stroke-width="1.75"/>
+    <rect x="380" y="44" width="300" height="196" rx="8" fill="#a5d8ff" fill-opacity="0.30" stroke="#1971c2" stroke-width="1.75"/>
+
+    <text x="190" y="68" text-anchor="middle" font-size="10.5" fill="#495057">differs in the 7th decimal place</text>
+    <g font-size="12.5">
+      <text x="72" y="96">doc_A</text>
+      <text x="162" y="96">0.8421335</text>
+      <text x="72" y="120">doc_B</text>
+      <text x="162" y="120">0.8421336</text>
+      <text x="72" y="144">doc_C</text>
+      <text x="162" y="144">0.8421337</text>
+    </g>
+    <line x1="64" y1="160" x2="316" y2="160" stroke="#e03131" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="72" y="186" font-size="12">run 1:</text>
+    <text x="150" y="186" font-size="12.5" font-weight="700">C, B, A</text>
+    <text x="72" y="214" font-size="12">run 2:</text>
+    <text x="150" y="214" font-size="12.5" font-weight="700" fill="#c92a2a">C, A, B</text>
+
+    <text x="530" y="68" text-anchor="middle" font-size="10.5" fill="#495057">rounds to the same value, ID breaks the tie</text>
+    <g font-size="12.5">
+      <text x="412" y="96">doc_A</text>
+      <text x="502" y="96">0.842134</text>
+      <text x="412" y="120">doc_B</text>
+      <text x="502" y="120">0.842134</text>
+      <text x="412" y="144">doc_C</text>
+      <text x="502" y="144">0.842134</text>
+    </g>
+    <text x="616" y="120" font-size="10.5" font-weight="700" fill="#1864ab">all equal</text>
+    <line x1="404" y1="160" x2="656" y2="160" stroke="#1971c2" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="412" y="186" font-size="12">run 1:</text>
+    <text x="490" y="186" font-size="12.5" font-weight="700">A, B, C</text>
+    <text x="412" y="214" font-size="12">run 2:</text>
+    <text x="490" y="214" font-size="12.5" font-weight="700" fill="#1864ab">A, B, C</text>
+
+    <text x="190" y="268" text-anchor="middle" font-size="11.5" font-weight="700" fill="#c92a2a">order is hostage to the noise floor</text>
+    <text x="530" y="268" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1864ab">order cannot move below the step</text>
+    <text x="360" y="298" text-anchor="middle" font-size="11" fill="#495057">Round to just above your measured noise floor, then break ties on an immutable ID.</text>
+  </g>
+</svg>

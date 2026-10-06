@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 424" width="1180" height="695" role="img">
+  <rect width="720" height="424" rx="12" fill="#ffffff" stroke="#dee2e6" stroke-width="1"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#212529">
+    <text x="40" y="32" font-size="14" font-weight="700">WHERE THE VARIANCE ENTERS</text>
+    <text x="680" y="32" font-size="11.5" fill="#868e96" text-anchor="end">typical effect</text>
+
+    <rect x="40" y="48" width="440" height="76" rx="8" fill="#ffe3e3" fill-opacity="0.55" stroke="#e03131" stroke-width="2"/>
+    <text x="58" y="74" font-size="14" font-weight="700" fill="#c92a2a">1. Text preparation</text>
+    <text x="58" y="96" font-size="11.5" fill="#495057">unicode normalization, tokenizer version,</text>
+    <text x="58" y="112" font-size="11.5" fill="#495057">chunk boundaries, truncation unit</text>
+    <text x="500" y="82" font-size="12.5" font-weight="700" fill="#c92a2a">1e-2 to 1.0</text>
+    <text x="500" y="100" font-size="11" fill="#495057">wrong vector space</text>
+
+    <rect x="40" y="136" width="440" height="76" rx="8" fill="#a5d8ff" fill-opacity="0.35" stroke="#1971c2" stroke-width="2"/>
+    <text x="58" y="162" font-size="14" font-weight="700" fill="#1864ab">2. Embedding</text>
+    <text x="58" y="184" font-size="11.5" fill="#495057">model version drift, batch shape,</text>
+    <text x="58" y="200" font-size="11.5" fill="#495057">precision, fleet hardware</text>
+    <text x="500" y="170" font-size="12.5" font-weight="700" fill="#1864ab">1e-7 to 1e-3</text>
+    <text x="500" y="188" font-size="11" fill="#495057">reorders near ties</text>
+
+    <rect x="40" y="224" width="440" height="76" rx="8" fill="#f8f9fa" stroke="#868e96" stroke-width="1.75"/>
+    <text x="58" y="250" font-size="14" font-weight="700">3. Index and search</text>
+    <text x="58" y="272" font-size="11.5" fill="#495057">replica copies, traversal order,</text>
+    <text x="58" y="288" font-size="11.5" fill="#495057">budget cutoffs, tie breaking</text>
+    <text x="500" y="258" font-size="12.5" font-weight="700">different</text>
+    <text x="500" y="276" font-size="11" fill="#495057">candidate set</text>
+
+    <rect x="40" y="312" width="440" height="76" rx="8" fill="#f8f9fa" stroke="#868e96" stroke-width="1.75"/>
+    <text x="58" y="338" font-size="14" font-weight="700">4. Pipeline</text>
+    <text x="58" y="360" font-size="11.5" fill="#495057">fusion scoring, shard merge, reranker,</text>
+    <text x="58" y="376" font-size="11.5" fill="#495057">caches, mutable filters</text>
+    <text x="500" y="346" font-size="12.5" font-weight="700">different</text>
+    <text x="500" y="364" font-size="11" fill="#495057">candidate set</text>
+
+    <text x="360" y="412" text-anchor="middle" font-size="11" fill="#868e96">The top two layers alone span seven orders of magnitude.</text>
+  </g>
+</svg>

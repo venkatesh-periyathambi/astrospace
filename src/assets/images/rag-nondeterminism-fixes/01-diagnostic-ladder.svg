@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 452" width="1180" height="741" role="img">
+  <rect width="720" height="452" rx="12" fill="#ffffff" stroke="#dee2e6" stroke-width="1"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#212529">
+    <text x="40" y="30" font-size="13.5" font-weight="700">PIN ONE STAGE AT A TIME, CHEAPEST FIRST</text>
+    <text x="640" y="30" text-anchor="end" font-size="10.5" fill="#868e96">if the variance stops here</text>
+
+    <rect x="40" y="46" width="600" height="38" rx="6" fill="#a5d8ff" fill-opacity="0.35" stroke="#1971c2" stroke-width="1.75"/>
+    <circle cx="64" cy="65" r="11" fill="#1971c2"/>
+    <text x="64" y="69" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">1</text>
+    <text x="86" y="69" font-size="12" font-weight="700">diff two identical request traces</text>
+    <text x="628" y="69" text-anchor="end" font-size="10" fill="#1864ab">names the layer outright</text>
+
+    <rect x="40" y="92" width="600" height="38" rx="6" fill="#a5d8ff" fill-opacity="0.35" stroke="#1971c2" stroke-width="1.75"/>
+    <circle cx="64" cy="111" r="11" fill="#1971c2"/>
+    <text x="64" y="115" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">2</text>
+    <text x="86" y="115" font-size="12" font-weight="700">log scores, not just document IDs</text>
+    <text x="628" y="115" text-anchor="end" font-size="10" fill="#1864ab">same scores means tie breaking</text>
+
+    <rect x="40" y="138" width="600" height="38" rx="6" fill="#f8f9fa" stroke="#868e96" stroke-width="1.5"/>
+    <circle cx="64" cy="157" r="11" fill="#868e96"/>
+    <text x="64" y="161" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">3</text>
+    <text x="86" y="161" font-size="12">bypass every cache tier</text>
+    <text x="628" y="161" text-anchor="end" font-size="10" fill="#495057">caching</text>
+
+    <rect x="40" y="184" width="600" height="38" rx="6" fill="#f8f9fa" stroke="#868e96" stroke-width="1.5"/>
+    <circle cx="64" cy="203" r="11" fill="#868e96"/>
+    <text x="64" y="207" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">4</text>
+    <text x="86" y="207" font-size="12">inject identical query vector bytes</text>
+    <text x="628" y="207" text-anchor="end" font-size="10" fill="#495057">rewriting or embedding</text>
+
+    <rect x="40" y="230" width="600" height="38" rx="6" fill="#f8f9fa" stroke="#868e96" stroke-width="1.5"/>
+    <circle cx="64" cy="249" r="11" fill="#868e96"/>
+    <text x="64" y="253" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">5</text>
+    <text x="86" y="253" font-size="12">turn the reranker off</text>
+    <text x="628" y="253" text-anchor="end" font-size="10" fill="#495057">reranker input or batching</text>
+
+    <rect x="40" y="276" width="600" height="38" rx="6" fill="#f8f9fa" stroke="#868e96" stroke-width="1.5"/>
+    <circle cx="64" cy="295" r="11" fill="#868e96"/>
+    <text x="64" y="299" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">6</text>
+    <text x="86" y="299" font-size="12">run each retrieval leg on its own</text>
+    <text x="628" y="299" text-anchor="end" font-size="10" fill="#495057">fusion scoring</text>
+
+    <rect x="40" y="322" width="600" height="38" rx="6" fill="#f8f9fa" stroke="#868e96" stroke-width="1.5"/>
+    <circle cx="64" cy="341" r="11" fill="#868e96"/>
+    <text x="64" y="345" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">7</text>
+    <text x="86" y="345" font-size="12">one shard, one replica, no partials</text>
+    <text x="628" y="345" text-anchor="end" font-size="10" fill="#495057">topology or partial results</text>
+
+    <rect x="40" y="368" width="600" height="38" rx="6" fill="#f8f9fa" stroke="#868e96" stroke-width="1.5"/>
+    <circle cx="64" cy="387" r="11" fill="#868e96"/>
+    <text x="64" y="391" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">8</text>
+    <text x="86" y="391" font-size="12">compare with brute force exact search</text>
+    <text x="628" y="391" text-anchor="end" font-size="10" fill="#495057">splits churn from low recall</text>
+
+    <text x="360" y="432" text-anchor="middle" font-size="11" fill="#495057">Then replay the pinned input under load. Variance only under load means</text>
+    <text x="360" y="446" text-anchor="middle" font-size="11" fill="#495057">dynamic batching, deadline truncation or queue rejection.</text>
+  </g>
+</svg>
