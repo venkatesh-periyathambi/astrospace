@@ -30,7 +30,7 @@
     </g>
 
     <line x1="300" y1="82" x2="300" y2="106" stroke="#e03131" stroke-width="1.25"/>
-    <text x="300" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#c92a2a">excluded by the filter — and the only bridge</text>
+    <text x="300" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#c92a2a">excluded by the filter, and the only bridge</text>
     <text x="300" y="70" text-anchor="middle" font-size="12" font-weight="700" fill="#c92a2a">to every vector that passes it</text>
 
     <path d="M110,251 L111.8,256.5 L117.6,256.5 L112.9,259.9 L114.7,265.4 L110,262 L105.3,265.4 L107.1,259.9 L102.4,256.5 L108.2,256.5 Z" fill="#212529"/>

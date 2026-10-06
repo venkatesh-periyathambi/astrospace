@@ -1,6 +1,6 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-05-16T10:00:00Z
+pubDatetime: 2026-02-16T10:00:00Z
 title: "Aurora to Redshift Zero-ETL: what actually replicates"
 slug: aurora-redshift-zero-etl
 featured: true
