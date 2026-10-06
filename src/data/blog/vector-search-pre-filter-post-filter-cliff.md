@@ -1,6 +1,6 @@
 ---
 author: Venkatesh Periyathambi
-pubDatetime: 2026-09-10T09:00:00Z
+pubDatetime: 2026-10-06T09:00:00Z
 title: "The Pre-Filter and Post-Filter Cliff in Vector Search"
 slug: vector-search-pre-filter-post-filter-cliff
 featured: false
