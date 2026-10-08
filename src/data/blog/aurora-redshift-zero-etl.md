@@ -19,9 +19,9 @@ If you're running reporting queries against your Aurora PostgreSQL read replicas
 
 The pitch is great: near real-time replication into a columnar warehouse with no pipelines to write, no Glue jobs to babysit, no DMS task tuning. But once you start planning a real migration, the questions get interesting fast. Three of the ones I keep getting asked:
 
-1. *What happens to my NOT NULL columns? PostgreSQL enforces them strictly — does Redshift?*
-2. *What about indexes and performance? Half my Aurora schema is held together by indexes and foreign keys.*
-3. *What happens when replication retries — could I end up with duplicates, given Redshift doesn't enforce uniqueness?*
+1. _What happens to my NOT NULL columns? PostgreSQL enforces them strictly — does Redshift?_
+2. _What about indexes and performance? Half my Aurora schema is held together by indexes and foreign keys._
+3. _What happens when replication retries — could I end up with duplicates, given Redshift doesn't enforce uniqueness?_
 
 Let's go through all three.
 
@@ -39,11 +39,11 @@ Before anything else: the database that Zero-ETL creates in Redshift is **read-o
 
 ### Question A: will NULLs ever arrive in a NOT NULL column?
 
-**No, unconditionally.** Aurora enforces NOT NULL at write time, *before* the row hits the logical replication stream that Zero-ETL consumes. Aurora is the gate, and Redshift just receives whatever Aurora already validated.
+**No, unconditionally.** Aurora enforces NOT NULL at write time, _before_ the row hits the logical replication stream that Zero-ETL consumes. Aurora is the gate, and Redshift just receives whatever Aurora already validated.
 
 You do not need to worry about data integrity here. If a column is NOT NULL on Aurora, no NULL value will ever land in the Redshift copy.
 
-### Question B: is the NOT NULL constraint *declared* on the Redshift table?
+### Question B: is the NOT NULL constraint _declared_ on the Redshift table?
 
 In practice, yes — the integration propagates NOT NULL onto replicated columns, and primary key columns are NOT NULL by definition (Zero-ETL requires a primary key to replicate at all).
 
@@ -79,16 +79,16 @@ This is the part where a lot of people get burned. Redshift is not Aurora-with-m
 
 **No indexes from your PostgreSQL schema.** Redshift doesn't have B-tree, hash, GIN, or GiST indexes. Your PostgreSQL indexes are simply ignored.
 
-Tables land with `DISTSTYLE AUTO` and `SORTKEY AUTO`. Redshift's autonomic optimizer eventually chooses distribution and sort keys based on observed query patterns — but it's reactive and conservative. For your hot reporting tables, you'll usually do better setting these explicitly. Foreign keys *do* replicate, but as **informational constraints only** — Redshift doesn't enforce them, though the optimizer uses them for things like join elimination.
+Tables land with `DISTSTYLE AUTO` and `SORTKEY AUTO`. Redshift's autonomic optimizer eventually chooses distribution and sort keys based on observed query patterns — but it's reactive and conservative. For your hot reporting tables, you'll usually do better setting these explicitly. Foreign keys _do_ replicate, but as **informational constraints only** — Redshift doesn't enforce them, though the optimizer uses them for things like join elimination.
 
 ### The Aurora → Redshift translation table
 
-| Aurora PostgreSQL | Redshift equivalent |
-|---|---|
-| B-tree / hash / GIN indexes | **SORTKEY** (controls physical sort order) + zone maps (auto min/max per 1MB block) |
-| (no concept) | **DISTKEY** — controls how rows shard across compute nodes; critical for join performance |
-| Foreign keys (enforced) | Foreign keys (informational only — optimizer hint, not enforced) |
-| Primary keys (enforced unique) | Primary keys (informational only) |
+| Aurora PostgreSQL              | Redshift equivalent                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
+| B-tree / hash / GIN indexes    | **SORTKEY** (controls physical sort order) + zone maps (auto min/max per 1MB block)       |
+| (no concept)                   | **DISTKEY** — controls how rows shard across compute nodes; critical for join performance |
+| Foreign keys (enforced)        | Foreign keys (informational only — optimizer hint, not enforced)                          |
+| Primary keys (enforced unique) | Primary keys (informational only)                                                         |
 
 The two concepts that actually drive Redshift performance are DISTKEY and SORTKEY:
 
@@ -123,17 +123,17 @@ This gives you all the things Zero-ETL doesn't: explicit DIST/SORT keys, NOT NUL
 
 ## 3. Retries, failures, and duplicates: what actually happens when things go wrong?
 
-This is a great question to ask, especially since you've already noticed that Redshift treats `PRIMARY KEY` and `UNIQUE` as *informational only*. If Redshift won't reject a duplicate insert, what stops a retried replication event from creating one?
+This is a great question to ask, especially since you've already noticed that Redshift treats `PRIMARY KEY` and `UNIQUE` as _informational only_. If Redshift won't reject a duplicate insert, what stops a retried replication event from creating one?
 
 The short answer: **the integration is upsert-based, keyed on the primary key, not append-based** — and that's why Zero-ETL requires a primary key in the first place. Let's unpack that.
 
 ### Why the primary key requirement isn't just bureaucracy
 
-You may have noticed Zero-ETL refuses to replicate any table without a primary key. That's not a stylistic choice — it's the mechanism that makes the replication idempotent. From the AWS docs on handling tables without primary keys: *"Primary keys are required for zero-ETL integrations because they tie each change log event to the specific row being modified."*
+You may have noticed Zero-ETL refuses to replicate any table without a primary key. That's not a stylistic choice — it's the mechanism that makes the replication idempotent. From the AWS docs on handling tables without primary keys: _"Primary keys are required for zero-ETL integrations because they tie each change log event to the specific row being modified."_
 
 Each row in the Aurora WAL is identified by its primary key. When the integration applies a change event to Redshift, it's effectively doing a keyed merge — `INSERT ... ON CONFLICT`-style logic, conceptually — not a blind `INSERT`. So if a network blip causes the same change event to be delivered twice, the second application is a no-op (or an idempotent overwrite to the same value), not a duplicate row.
 
-This is a subtle but important architectural detail: Redshift doesn't enforce uniqueness, but the *replication apply layer* does, by virtue of always merging on the primary key.
+This is a subtle but important architectural detail: Redshift doesn't enforce uniqueness, but the _replication apply layer_ does, by virtue of always merging on the primary key.
 
 ### What "retry" actually looks like in Zero-ETL
 
@@ -153,8 +153,8 @@ This happens when the integration itself can't proceed: tracked changes between 
 In the steady-state Zero-ETL flow, they shouldn't — assuming a real primary key. The places to actually watch out:
 
 - **A "primary key" that isn't really unique.** If you used a synthetic PK or a non-unique index that happens to be marked unique on a poorly-modeled source table, the upstream uniqueness assumption breaks and weird things can happen on resync. The fix is upstream: make sure PKs are actually unique in Aurora.
-- **History mode is on.** If you've enabled history mode for a table, *every change* produces a new versioned row (with `_record_is_active`, `_record_create_time`, and `_record_delete_time` columns). That's not a bug — it's the feature working — but if you're not expecting it, the table will look "full of duplicates" because you're seeing every historical version, not just current state. Filter by `_record_is_active = true` (or just use plain mode) for current-state queries.
-- **Your curated downstream layer.** Zero-ETL gives you a clean replicated table. The duplicate risk re-enters the picture in *your* CTAS/insert pipelines on top of the replica. If your `INSERT INTO reporting.fact SELECT ...` runs twice, Redshift will happily insert the rows twice — because, as you correctly noted, **PK and UNIQUE in Redshift are not enforced**. Idempotency in your curated layer is your problem to solve. Common patterns:
+- **History mode is on.** If you've enabled history mode for a table, _every change_ produces a new versioned row (with `_record_is_active`, `_record_create_time`, and `_record_delete_time` columns). That's not a bug — it's the feature working — but if you're not expecting it, the table will look "full of duplicates" because you're seeing every historical version, not just current state. Filter by `_record_is_active = true` (or just use plain mode) for current-state queries.
+- **Your curated downstream layer.** Zero-ETL gives you a clean replicated table. The duplicate risk re-enters the picture in _your_ CTAS/insert pipelines on top of the replica. If your `INSERT INTO reporting.fact SELECT ...` runs twice, Redshift will happily insert the rows twice — because, as you correctly noted, **PK and UNIQUE in Redshift are not enforced**. Idempotency in your curated layer is your problem to solve. Common patterns:
   - `MERGE INTO` (Redshift supports this) keyed on a stable identifier.
   - Stage → swap: load into a staging table, then `BEGIN; DELETE FROM target WHERE …; INSERT INTO target SELECT … FROM staging; COMMIT;`.
   - Recompute-from-scratch: drop and rebuild the curated table from the replica on each run. Cheaper than it sounds for small marts.

@@ -130,6 +130,6 @@ Measure those things across the filters your users really send, and the cliff st
 
 ## References
 
-1. S. Gollapudi et al., "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters", available at: [https://doi.org/10.1145/3543507.3583552](https://doi.org/10.1145/3543507.3583552) (accessed 6 October 2026).
-2. L. Patel et al., "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data", available at: [https://arxiv.org/abs/2403.04871](https://arxiv.org/abs/2403.04871) (accessed 6 October 2026).
-3. J. Engels et al., "Approximate Nearest Neighbor Search with Window Filters", available at: [https://arxiv.org/abs/2402.00943](https://arxiv.org/abs/2402.00943) (accessed 6 October 2026).
+1. S. Gollapudi et al., "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters", available at: [https://doi.org/10.1145/3543507.3583552](https://doi.org/10.1145/3543507.3583552).
+2. L. Patel et al., "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data", available at: [https://arxiv.org/abs/2403.04871](https://arxiv.org/abs/2403.04871).
+3. J. Engels et al., "Approximate Nearest Neighbor Search with Window Filters", available at: [https://arxiv.org/abs/2402.00943](https://arxiv.org/abs/2402.00943).

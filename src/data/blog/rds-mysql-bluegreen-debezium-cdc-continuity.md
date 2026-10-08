@@ -23,7 +23,7 @@ description: "How to run a major version upgrade on RDS MySQL without breaking y
 
 This comes up whenever a team has a multi-terabyte MySQL database with a CDC pipeline hanging off it, and the worry is always the same one. Binlog coordinates reset when the database is upgraded, the offset Debezium has stored stops meaning anything, and you are looking at days of re-snapshotting while the data team stares at stale dashboards.
 
-You do not need a re-snapshot. The awkward part is that the documentation does not explain how this behaves when Debezium reads from a *replica* rather than the writer, which is how most people run it. That is the gap I want to fill.
+You do not need a re-snapshot. The awkward part is that the documentation does not explain how this behaves when Debezium reads from a _replica_ rather than the writer, which is how most people run it. That is the gap I want to fill.
 
 ## Table of Contents
 
@@ -41,7 +41,7 @@ There is an RDS-specific trap too: **binlogs are only retained if automated back
 
 If binary logging is off entirely, the connector will not even start. Debezium runs `SHOW MASTER STATUS` during its snapshot, gets an empty result, and throws `Cannot read the binlog filename and position via 'SHOW MASTER STATUS'`. On RDS, `log_bin` is managed by AWS and defaults to off, so this catches people out regularly.
 
-One forward-looking note, since the whole point here is a major version upgrade: MySQL 8.4 renames that statement to `SHOW BINARY LOG STATUS`. RDS supports 8.4. If 8.4 is your upgrade target, confirm your Debezium version handles the rename *before* you book the window — upgrading the database and then discovering the connector cannot read the server's binlog status is a bad afternoon.
+One forward-looking note, since the whole point here is a major version upgrade: MySQL 8.4 renames that statement to `SHOW BINARY LOG STATUS`. RDS supports 8.4. If 8.4 is your upgrade target, confirm your Debezium version handles the rename _before_ you book the window — upgrading the database and then discovering the connector cannot read the server's binlog status is a bad afternoon.
 
 After a major version upgrade, the coordinates the connector has stored do not exist on the new instance any more. That is the problem this post is about.
 
@@ -53,7 +53,7 @@ RDS Blue/Green Deployments copy your whole environment into a staging area, upgr
 
 The topology is copied in full, so the writer and every replica get recreated on the green side without you doing anything. Parameter settings come across too, which means `log_bin = ON`, `binlog_format = ROW` and `binlog_row_image = FULL` are still in place on the green replica. Endpoints move with the switchover — in AWS's words, "RDS also renames the endpoints in the green environment to match the corresponding endpoints in the blue environment so that application changes aren't required." And the switchover itself takes seconds rather than hours.
 
-Be precise about what that endpoint promise covers, though, because it is narrower than people assume. A standard RDS for MySQL read replica is its own DB instance with its own instance endpoint — there is no aggregate reader endpoint to point a connector at, Multi-AZ DB clusters being the exception that Blue/Green does not support anyway. What you get is the green replica inheriting the blue replica's endpoint DNS name, which is enough *provided your connector re-resolves that name*. Hold that thought.
+Be precise about what that endpoint promise covers, though, because it is narrower than people assume. A standard RDS for MySQL read replica is its own DB instance with its own instance endpoint — there is no aggregate reader endpoint to point a connector at, Multi-AZ DB clusters being the exception that Blue/Green does not support anyway. What you get is the green replica inheriting the blue replica's endpoint DNS name, which is enough _provided your connector re-resolves that name_. Hold that thought.
 
 There is one catch, and it is the reason this post exists. Every instance in the green environment starts a fresh binlog sequence, so the file and position Debezium has stored no longer point at anything real.
 
@@ -80,11 +80,11 @@ This works today and needs nothing set up in advance.
 
 4. **Read the new binlog coordinates from the switchover event.**
 
-   AWS emits an event for exactly this purpose, documented under "Updating the parent node for consumers" on the switchover page. In the RDS console open **Events**, and filter by the name the green DB instance had *before* switchover. You are looking for:
+   AWS emits an event for exactly this purpose, documented under "Updating the parent node for consumers" on the switchover page. In the RDS console open **Events**, and filter by the name the green DB instance had _before_ switchover. You are looking for:
 
    > `Binary log coordinates in green environment after switchover: file mysql-bin-changelog.000003 and position 40134574`
 
-   Use that event, not the `Binlog position from crash recovery is ...` line that also shows up under **Logs & events**. The crash-recovery line is the position at which the instance *started*, and a green instance started when you created the green environment — potentially days earlier. Resume from it and you replay every transaction green received during staging.
+   Use that event, not the `Binlog position from crash recovery is ...` line that also shows up under **Logs & events**. The crash-recovery line is the position at which the instance _started_, and a green instance started when you created the green environment — potentially days earlier. Resume from it and you replay every transaction green received during staging.
 
    Here is the wrinkle the AWS procedure does not cover, and it is the one that matters when CDC reads from a replica. AWS documents this event as coming from the green **writer**. A replica's binlog is its own sequence with its own positions, so the writer's coordinates are meaningless on it. Before you plan a window around this step, confirm your green replica emits its own coordinates event. If it does not, your options are to resume against the writer instead, or to use GTID (Option B), where the question never arises.
 
@@ -166,7 +166,7 @@ Your writer and its replicas almost certainly share one parameter group, so you 
 
 The step that bites CDC pipelines is the waiting one near the end, and it is missing from most write-ups. Before you make the final move to `ON`, you have to stop needing any binlog that still holds pre-GTID transactions — because once `gtid_mode` is `ON`, those binlogs can no longer be used. If Debezium is still reading one when you flip it, the connector stops dead and your only way out is the re-snapshot you were trying to avoid. Confirm the connector has read past every anonymous transaction before that last step, not after.
 
-There is nothing to switch on in the connector itself. Debezium picks up GTIDs automatically once the server reports `gtid_mode = ON` — its docs are explicit that GTIDs are "not required for a Debezium MySQL connector," meaning they are a server-side property the connector adapts to rather than a feature you turn on. You will find advice out there to set `"gtid.source.includes": ".*"`. Ignore it. That property is a *filter* over which source UUIDs to consider, its default is unset (meaning all of them), and `.*` is an elaborate way of writing the default.
+There is nothing to switch on in the connector itself. Debezium picks up GTIDs automatically once the server reports `gtid_mode = ON` — its docs are explicit that GTIDs are "not required for a Debezium MySQL connector," meaning they are a server-side property the connector adapts to rather than a feature you turn on. You will find advice out there to set `"gtid.source.includes": ".*"`. Ignore it. That property is a _filter_ over which source UUIDs to consider, its default is unset (meaning all of them), and `.*` is an elaborate way of writing the default.
 
 The check that does matter: restart the connector and confirm its stored offset now contains a `gtids` field. If that field is missing, the connector is still tracking file and position, and none of this will help you.
 
@@ -174,7 +174,7 @@ The check that does matter: restart the connector and confirm its stored offset 
 
 Green replicates the full GTID history from blue while it is being staged, so `gtid_executed` on the green replica covers everything the connector has already seen, plus everything since.
 
-What green does *not* have is binlog older than itself. Green's binlog sequence begins when you created the green environment — the same reason AWS warns that after switchover, PITR's "earliest restorable time starts when you created the green environment." Everything before that point sits in green's `gtid_purged`. Ask for a GTID in that range and MySQL refuses with error 1236: the source "has purged binary logs containing GTIDs that the replica requires." The connector stops dead, and now you really do need a re-snapshot.
+What green does _not_ have is binlog older than itself. Green's binlog sequence begins when you created the green environment — the same reason AWS warns that after switchover, PITR's "earliest restorable time starts when you created the green environment." Everything before that point sits in green's `gtid_purged`. Ask for a GTID in that range and MySQL refuses with error 1236: the source "has purged binary logs containing GTIDs that the replica requires." The connector stops dead, and now you really do need a re-snapshot.
 
 In practice this only bites you if the connector has been down a while, because the usable window is `min(when green was created, your binlog retention hours)`. But it does mean Option B is not literally hands-off: the connector still has to be inside that window when you switch over. Check its lag before you press the button, exactly as you would for Option A.
 
@@ -182,7 +182,7 @@ In practice this only bites you if the connector has been down a while, because 
 
 You trigger the switchover, the connector loses its connection, and the replica's endpoint DNS name starts resolving to the green replica. The connector reconnects, sends its GTID set, and the green replica works out where to carry on from. CDC resumes without you editing anything.
 
-"Resumes on its own" does assume the connector retries rather than giving up. Switchover drops every connection and refuses new ones for its duration, so the binlog client *will* fail — under both options, not just this one. If your retry budget is shorter than the switchover takes, the task lands in `FAILED` and someone restarts it by hand, which is not the same as automatic. Check `errors.retry.timeout` against the switchover timeout you configured, which defaults to 300 seconds and can be set as high as an hour.
+"Resumes on its own" does assume the connector retries rather than giving up. Switchover drops every connection and refuses new ones for its duration, so the binlog client _will_ fail — under both options, not just this one. If your retry budget is shorter than the switchover takes, the task lands in `FAILED` and someone restarts it by hand, which is not the same as automatic. Check `errors.retry.timeout` against the switchover timeout you configured, which defaults to 300 seconds and can be set as high as an hour.
 
 ---
 
@@ -203,7 +203,7 @@ Two things prevent it:
 - Set `-Dsun.net.inetaddr.ttl=5` (or `networkaddress.cache.ttl=5` in `java.security`) on the Connect workers, and make sure nothing upstream — a caching resolver, a service mesh — is holding the name longer.
 - Simpler and more reliable: restart the Connect workers as part of the switchover runbook. Under Option A you are already accepting a brief CDC outage; under Option B a worker bounce costs seconds.
 
-Then verify against the source you *expect*, not the one you happen to be connected to. Because this is a major version upgrade, the version string is a perfect discriminator:
+Then verify against the source you _expect_, not the one you happen to be connected to. Because this is a major version upgrade, the version string is a perfect discriminator:
 
 ```sql
 SELECT @@version, @@server_uuid;
@@ -215,14 +215,14 @@ Run it against whatever the connector resolved. Green reports the new engine ver
 
 ## Which one to use
 
-| | Binlog file and position | GTID |
-| --- | --- | --- |
-| CDC downtime | Minutes | Seconds |
-| Manual steps | Read the event log, then patch the offset | None, provided the connector is caught up |
-| Re-snapshot | No | No |
-| Works for the next upgrade too | No | Yes |
-| Setup needed first | None | One-time enablement |
-| Room for human error | You are typing a binlog offset by hand | Much smaller, though not zero |
+|                                | Binlog file and position                  | GTID                                      |
+| ------------------------------ | ----------------------------------------- | ----------------------------------------- |
+| CDC downtime                   | Minutes                                   | Seconds                                   |
+| Manual steps                   | Read the event log, then patch the offset | None, provided the connector is caught up |
+| Re-snapshot                    | No                                        | No                                        |
+| Works for the next upgrade too | No                                        | Yes                                       |
+| Setup needed first             | None                                      | One-time enablement                       |
+| Room for human error           | You are typing a binlog offset by hand    | Much smaller, though not zero             |
 
 GTID removes the manual offset editing, which is where most mistakes happen. It does not make the upgrade risk-free. Errant transactions on one instance, the pre-GTID binlog trap in step 6, and green's `gtid_purged` floor are all still yours to manage — and neither option protects you from the DNS problem above.
 

@@ -31,22 +31,22 @@ Small models are somewhere between 10 and 60 times cheaper per token than fronti
 
 Here is the shape of it. Illustrative bands per million tokens, and please check current list prices before you quote any of these to a CFO, because they move every few months:
 
-| Tier | Typical models | Rough band per 1M tokens |
-| --- | --- | --- |
-| Small | Claude Haiku, Gemini Flash, Nova Lite, small Llama or Mistral | $0.10 to $1 |
-| Mid | Claude Sonnet, Gemini Pro, Nova Pro | $1 to $5 |
-| Frontier | Claude Opus, GPT flagship, the reasoning models | $10 to $75 |
+| Tier     | Typical models                                                | Rough band per 1M tokens |
+| -------- | ------------------------------------------------------------- | ------------------------ |
+| Small    | Claude Haiku, Gemini Flash, Nova Lite, small Llama or Mistral | $0.10 to $1              |
+| Mid      | Claude Sonnet, Gemini Pro, Nova Pro                           | $1 to $5                 |
+| Frontier | Claude Opus, GPT flagship, the reasoning models               | $10 to $75               |
 
 Now put a realistic traffic mix through it. Index everything to the frontier tier at 1.0, call mid 0.2, call small 0.067 (about fifteen times cheaper), and include the cost of retrying the requests that fail their quality check:
 
-| Traffic | Share | Unit cost | Cost |
-| --- | --- | --- | --- |
-| Small tier | 75% | 0.067 | 0.050 |
-| Mid tier | 20% | 0.2 | 0.040 |
-| Frontier | 5% | 1.0 | 0.050 |
-| Retries: 15% of small calls redone at mid | 11% | 0.2 | 0.023 |
-| Retries: 10% of mid calls redone at frontier | 2% | 1.0 | 0.020 |
-| **Blended** | | | **0.183** |
+| Traffic                                      | Share | Unit cost | Cost      |
+| -------------------------------------------- | ----- | --------- | --------- |
+| Small tier                                   | 75%   | 0.067     | 0.050     |
+| Mid tier                                     | 20%   | 0.2       | 0.040     |
+| Frontier                                     | 5%    | 1.0       | 0.050     |
+| Retries: 15% of small calls redone at mid    | 11%   | 0.2       | 0.023     |
+| Retries: 10% of mid calls redone at frontier | 2%    | 1.0       | 0.020     |
+| **Blended**                                  |       |           | **0.183** |
 
 That's an 82% reduction against sending everything to the frontier model, with the retry cost paid for honestly rather than hidden. Notice something in that table: the 5% of traffic that goes straight to frontier costs as much as the 75% that goes to the small tier. The frontier share is the number to watch, not the small-tier share.
 
@@ -92,12 +92,12 @@ This is the question everyone skips past, including most write-ups of this patte
 
 The heuristic is a question about the shape of the task, not about how hard it feels:
 
-| Ask this | If yes | Why |
-| --- | --- | --- |
-| Is the output space small and closed? Picking a label, filling a fixed schema, choosing a route. | Small tier | There's little room for a wrong answer to be subtly wrong. |
-| Can a cheap, non-model check tell you the answer is wrong? | Small tier | A validator turns a quality risk into a retry. |
-| Does it need several tool calls, or state carried across steps? | Frontier | Small models lose the thread partway through a chain, and each dropped step compounds. |
-| Does correctness rest on judgement nothing downstream can verify? | Mid or frontier | If you can't check it, you can't safely route it down. |
+| Ask this                                                                                         | If yes          | Why                                                                                    |
+| ------------------------------------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------------------------- |
+| Is the output space small and closed? Picking a label, filling a fixed schema, choosing a route. | Small tier      | There's little room for a wrong answer to be subtly wrong.                             |
+| Can a cheap, non-model check tell you the answer is wrong?                                       | Small tier      | A validator turns a quality risk into a retry.                                         |
+| Does it need several tool calls, or state carried across steps?                                  | Frontier        | Small models lose the thread partway through a chain, and each dropped step compounds. |
+| Does correctness rest on judgement nothing downstream can verify?                                | Mid or frontier | If you can't check it, you can't safely route it down.                                 |
 
 That last row is the one that matters most and the one teams talk themselves out of. If you cannot write a check that catches a bad answer, you are not routing, you are gambling.
 
@@ -189,20 +189,20 @@ It's arithmetic. Small models are 10 to 60 times cheaper per token, so if you ca
 
 ## References
 
-1. Anthropic, 'Define success criteria and build evaluations', *Claude Platform Docs*, available at: [https://docs.claude.com/en/docs/test-and-evaluate/develop-tests](https://docs.claude.com/en/docs/test-and-evaluate/develop-tests) (accessed 15 September 2026).
+1. Anthropic, 'Define success criteria and build evaluations', _Claude Platform Docs_, available at: [https://docs.claude.com/en/docs/test-and-evaluate/develop-tests](https://docs.claude.com/en/docs/test-and-evaluate/develop-tests).
 
-2. H. Husain, 'Your AI Product Needs Evals', *Hamel's Blog*, available at: [https://hamel.dev/blog/posts/evals/](https://hamel.dev/blog/posts/evals/) (accessed 15 September 2026).
+2. H. Husain, 'Your AI Product Needs Evals', _Hamel's Blog_, available at: [https://hamel.dev/blog/posts/evals/](https://hamel.dev/blog/posts/evals/).
 
-3. OpenAI, 'Evaluating model performance', *OpenAI Platform Documentation*, available at: [https://platform.openai.com/docs/guides/evals](https://platform.openai.com/docs/guides/evals) (accessed 15 September 2026).
+3. OpenAI, 'Evaluating model performance', _OpenAI Platform Documentation_, available at: [https://platform.openai.com/docs/guides/evals](https://platform.openai.com/docs/guides/evals).
 
-4. I. Ong et al., 'RouteLLM: Learning to Route LLMs with Preference Data', arXiv:2406.18665, available at: [https://arxiv.org/abs/2406.18665](https://arxiv.org/abs/2406.18665) (accessed 15 September 2026).
+4. I. Ong et al., 'RouteLLM: Learning to Route LLMs with Preference Data', arXiv:2406.18665, available at: [https://arxiv.org/abs/2406.18665](https://arxiv.org/abs/2406.18665).
 
-5. Amazon Web Services, 'Understanding intelligent prompt routing in Amazon Bedrock', *Amazon Bedrock User Guide*, available at: [https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html) (accessed 15 September 2026).
+5. Amazon Web Services, 'Understanding intelligent prompt routing in Amazon Bedrock', _Amazon Bedrock User Guide_, available at: [https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html).
 
-6. Anthropic, 'Prompt caching', *Claude Platform Docs*, available at: [https://docs.claude.com/en/docs/build-with-claude/prompt-caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching) (accessed 15 September 2026).
+6. Anthropic, 'Prompt caching', _Claude Platform Docs_, available at: [https://docs.claude.com/en/docs/build-with-claude/prompt-caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching).
 
-7. Google Cloud, 'Context caching overview', *Vertex AI Generative AI Documentation*, available at: [https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview](https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview) (accessed 15 September 2026).
+7. Google Cloud, 'Context caching overview', _Vertex AI Generative AI Documentation_, available at: [https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview](https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview).
 
-8. G. Hinton, O. Vinyals and J. Dean, 'Distilling the Knowledge in a Neural Network', arXiv:1503.02531, available at: [https://arxiv.org/abs/1503.02531](https://arxiv.org/abs/1503.02531) (accessed 15 September 2026).
+8. G. Hinton, O. Vinyals and J. Dean, 'Distilling the Knowledge in a Neural Network', arXiv:1503.02531, available at: [https://arxiv.org/abs/1503.02531](https://arxiv.org/abs/1503.02531).
 
-9. N. Shazeer et al., 'Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer', arXiv:1701.06538, available at: [https://arxiv.org/abs/1701.06538](https://arxiv.org/abs/1701.06538) (accessed 15 September 2026).
+9. N. Shazeer et al., 'Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer', arXiv:1701.06538, available at: [https://arxiv.org/abs/1701.06538](https://arxiv.org/abs/1701.06538).

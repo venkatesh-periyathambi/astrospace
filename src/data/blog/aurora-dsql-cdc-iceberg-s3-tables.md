@@ -31,7 +31,7 @@ This post is the end-to-end pipeline: how it fits together, and the handful of r
 
 The thing that makes DSQL CDC pleasant to build on is that **change capture is a native, managed capability of the database itself**. You don't stand up a Debezium connector, you don't manage a Kafka Connect cluster, and you don't allocate replication slots that quietly retain WAL and pressure your storage if a consumer falls behind. DSQL reads committed transactions in the background, formats each net row-level change as a structured JSON record, and delivers it to a Kinesis stream you own. The database keeps doing what it does; capture rides alongside.
 
-> **Coming from a Debezium/Postgres world?** The reflex is to reach for a logical-replication connector. With DSQL you don't need one — capture is built in, so there's simply nothing to install or operate. DSQL is PostgreSQL *dialect*-compatible (v16 wire protocol, `psql`/`pgjdbc`/`psycopg` all work), and its CDC envelope is deliberately Debezium-*shaped* — `op`, `before`, `after`, and a `source` block with `txId`, `schema`, `table` — so your mental models and downstream tooling carry over. If your organization is standardized on Kafka, you can still bridge Kinesis into MSK downstream and let Debezium-aware sink connectors consume the records. The native stream just means less to run.
+> **Coming from a Debezium/Postgres world?** The reflex is to reach for a logical-replication connector. With DSQL you don't need one — capture is built in, so there's simply nothing to install or operate. DSQL is PostgreSQL _dialect_-compatible (v16 wire protocol, `psql`/`pgjdbc`/`psycopg` all work), and its CDC envelope is deliberately Debezium-_shaped_ — `op`, `before`, `after`, and a `source` block with `txId`, `schema`, `table` — so your mental models and downstream tooling carry over. If your organization is standardized on Kafka, you can still bridge Kinesis into MSK downstream and let Debezium-aware sink connectors consume the records. The native stream just means less to run.
 
 With that framing, let's build the pipeline.
 
@@ -45,7 +45,7 @@ Aurora DSQL ──▶ Kinesis Data Streams ──▶ Data Firehose ──▶ Apa
 
 Every hop is managed:
 
-- **DSQL → Kinesis.** DSQL captures the committed effect of every `INSERT`, `UPDATE`, and `DELETE` across all tables in the cluster and writes each as a JSON record to a Kinesis stream. It's a bring-your-own-target model: you create the stream and an IAM role DSQL assumes to write to it, and you own the stream's capacity, encryption, and retention. Creating the CDC stream is a single `CreateStream` call; status shows up via the `GetStream` API and CloudWatch. On a multi-Region cluster, one stream in any Region captures committed writes from *all* Regions.
+- **DSQL → Kinesis.** DSQL captures the committed effect of every `INSERT`, `UPDATE`, and `DELETE` across all tables in the cluster and writes each as a JSON record to a Kinesis stream. It's a bring-your-own-target model: you create the stream and an IAM role DSQL assumes to write to it, and you own the stream's capacity, encryption, and retention. Creating the CDC stream is a single `CreateStream` call; status shows up via the `GetStream` API and CloudWatch. On a multi-Region cluster, one stream in any Region captures committed writes from _all_ Regions.
 
 - **Kinesis → Firehose → Iceberg.** Firehose has a native Apache Iceberg destination and accepts Kinesis Data Streams as a source, so this hop needs no glue code. Firehose can write to Iceberg tables hosted in **S3 Tables**, automatically applies row-level insert/update/delete, guarantees exactly-once delivery to Iceberg, and can route a single stream to different tables based on record content. It requires the Glue Data Catalog, Iceberg **V2** format, and writes Parquet in **Merge-on-Read** mode.
 
@@ -59,11 +59,18 @@ DSQL delivers each change as a JSON envelope. An update looks like this:
 {
   "op": "u",
   "before": null,
-  "after": {"order_id": 1001, "item_id": 42, "quantity": 10, "price": "29.99"},
+  "after": {
+    "order_id": 1001,
+    "item_id": 42,
+    "quantity": 10,
+    "price": "29.99"
+  },
   "source": {
     "ts_ns": 1705318300000000000,
     "txId": "qvtiesgmd55cvlfukm3dfuotji",
-    "schema": "public", "table": "order_items", "db": "postgres"
+    "schema": "public",
+    "table": "order_items",
+    "db": "postgres"
   },
   "ts_ns": 1705318300125483291
 }
@@ -83,7 +90,7 @@ Firehose's **Operation expression** — the field that tells it whether to inser
 
 ### Where the primary key lives
 
-For inserts and updates, the full row — primary key included — is under `after`. For **deletes**, `after` is `null` and `before` carries *just the primary key*:
+For inserts and updates, the full row — primary key included — is under `after`. For **deletes**, `after` is `null` and `before` carries _just the primary key_:
 
 ```json
 { "op": "d", "before": {"order_id": 1001, "item_id": 42}, "after": null, ... }
@@ -109,7 +116,7 @@ The standard pattern handles both cleanly: **last-writer-wins keyed on commit ti
 
 **Write-set compaction** is a genuine advantage for an analytics sink. DSQL compacts each committed transaction before publishing and emits **at most one record per row per transaction**, reflecting the net effect. Ten updates to a row in one transaction become a single record with the final state; an insert-then-delete in the same transaction produces no record at all.
 
-For a lakehouse that's ideal — fewer redundant Iceberg merges, less write amplification, a cleaner table — because dashboards want net state, not every intermediate keystroke. (If you ever need a record for *every* statement, run each in its own transaction; for analytics you rarely do.)
+For a lakehouse that's ideal — fewer redundant Iceberg merges, less write amplification, a cleaner table — because dashboards want net state, not every intermediate keystroke. (If you ever need a record for _every_ statement, run each in its own transaction; for analytics you rarely do.)
 
 ## What the transform does, end to end
 

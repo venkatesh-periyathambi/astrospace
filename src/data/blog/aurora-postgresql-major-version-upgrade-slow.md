@@ -77,7 +77,7 @@ Here's why, based on how [`pg_upgrade`](https://www.postgresql.org/docs/current/
 
 **Schema restoration (`pg_restore`) must respect dependency ordering.** A foreign key depends on the referenced table existing first. A view depends on its underlying tables. A function might depend on a custom type. These dependencies force a specific execution order.
 
-**The `-j` (jobs) parameter helps — but only for post-upgrade tasks.** Things like running `ANALYZE` on multiple tables concurrently, or rebuilding indexes in parallel. These happen *after* the metadata is already restored.
+**The `-j` (jobs) parameter helps — but only for post-upgrade tasks.** Things like running `ANALYZE` on multiple tables concurrently, or rebuilding indexes in parallel. These happen _after_ the metadata is already restored.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -123,9 +123,10 @@ SELECT pg_size_pretty(pg_total_relation_size('pg_largeobject'));
 
 ### Orphaned Large Objects: The Hidden Multiplier
 
-Large objects have a lifecycle: create (`lo_creat`), populate (`lo_put`), and delete (`lo_unlink`). The problem is that deleting a row that *references* a large object doesn't automatically delete the large object itself. This creates **orphaned large objects** — entries in `pg_largeobject` with no referencing row anywhere in your schema.
+Large objects have a lifecycle: create (`lo_creat`), populate (`lo_put`), and delete (`lo_unlink`). The problem is that deleting a row that _references_ a large object doesn't automatically delete the large object itself. This creates **orphaned large objects** — entries in `pg_largeobject` with no referencing row anywhere in your schema.
 
 Common causes of orphaned large objects:
+
 - Deleting rows without calling `lo_unlink()`
 - Dropping tables that stored large object OIDs
 - Updating rows that change a large object reference without unlinking the old one
@@ -157,12 +158,12 @@ CREATE TRIGGER t_cleanup
 
 ### The Bottom Line on Data Types and Upgrades
 
-| Storage Method | Stored In | Upgrade Impact |
-|---------------|-----------|---------------|
-| JSONB (inline/TOAST) | Table + TOAST table | Low — file linking, no dump/restore of data |
-| BYTEA (inline/TOAST) | Table + TOAST table | Low — same as JSONB |
-| Large Objects (`lo`) | `pg_largeobject` catalog | High — all metadata processed during dump/restore |
-| Orphaned Large Objects | `pg_largeobject` catalog | High — processed but serve no purpose |
+| Storage Method         | Stored In                | Upgrade Impact                                    |
+| ---------------------- | ------------------------ | ------------------------------------------------- |
+| JSONB (inline/TOAST)   | Table + TOAST table      | Low — file linking, no dump/restore of data       |
+| BYTEA (inline/TOAST)   | Table + TOAST table      | Low — same as JSONB                               |
+| Large Objects (`lo`)   | `pg_largeobject` catalog | High — all metadata processed during dump/restore |
+| Orphaned Large Objects | `pg_largeobject` catalog | High — processed but serve no purpose             |
 
 If your application uses the Large Object API (`lo_creat`, `lo_open`, `lo_write`), clean up orphans before upgrading. If you're using JSONB or BYTEA, you're fine — those won't slow your upgrade regardless of how large the values are.
 
@@ -182,14 +183,14 @@ Before upgrading production, run the [pg-collector](https://github.com/awslabs/p
 
 What to look for in the comparison:
 
-| Metric | Impact on Upgrade Time |
-|--------|----------------------|
-| Total number of relations | High — each one needs schema dump/restore |
-| Number of foreign keys | High — each needs validation during restore |
-| Number of databases | High — processed sequentially |
-| Number of views/materialized views | Medium — complex dependency chains |
-| Number of functions/procedures | Medium — must be recreated in order |
-| Data size | Low — file linking is fast |
+| Metric                             | Impact on Upgrade Time                      |
+| ---------------------------------- | ------------------------------------------- |
+| Total number of relations          | High — each one needs schema dump/restore   |
+| Number of foreign keys             | High — each needs validation during restore |
+| Number of databases                | High — processed sequentially               |
+| Number of views/materialized views | Medium — complex dependency chains          |
+| Number of functions/procedures     | Medium — must be recreated in order         |
+| Data size                          | Low — file linking is fast                  |
 
 If your non-prod has the same object count as production and upgraded in one hour, production should take roughly the same time. If there's a major discrepancy, dig into the pg-collector output to find what differs — extra schemas, more constraints, or additional databases in one environment.
 
@@ -204,6 +205,7 @@ The most reliable way to estimate upgrade time:
 How you create that copy depends on your platform:
 
 **Aurora PostgreSQL** — use a fast clone (copy-on-write, takes seconds):
+
 ```bash
 aws rds restore-db-cluster-to-point-in-time \
   --source-db-cluster-identifier your-prod-cluster \
@@ -213,6 +215,7 @@ aws rds restore-db-cluster-to-point-in-time \
 ```
 
 **RDS PostgreSQL** — restore from a snapshot:
+
 ```bash
 aws rds restore-db-instance-from-db-snapshot \
   --db-instance-identifier upgrade-test \
@@ -220,6 +223,7 @@ aws rds restore-db-instance-from-db-snapshot \
 ```
 
 **Self-hosted** — use `pg_basebackup` or a filesystem snapshot, then run `pg_upgrade` with `--link` mode:
+
 ```bash
 pg_upgrade \
   --old-datadir /var/lib/postgresql/15/main \
@@ -262,6 +266,7 @@ One of the most frustrating aspects of PostgreSQL major version upgrades is the 
 On self-hosted, you at least have access to `pg_upgrade` logs in real time and can watch which database is being processed. But even there, you can't see progress within a single database's schema restore.
 
 As of this writing, there's no built-in way to monitor upgrade progress in real time on managed platforms. The community has long asked for:
+
 - Upgrade progress/status visibility
 - Increased parallelism in the metadata phase
 - Exposing the `-j` option for applicable phases
@@ -284,26 +289,26 @@ Until these land, your best bet is to estimate duration upfront using the clone/
 
 ---
 
-*Based on real-world upgrade experiences across multiple PostgreSQL clusters — Aurora, RDS, and self-hosted — of varying sizes and complexity.*
+_Based on real-world upgrade experiences across multiple PostgreSQL clusters — Aurora, RDS, and self-hosted — of varying sizes and complexity._
 
 ## References
 
-1. PostgreSQL Global Development Group, 'pg_upgrade', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/pgupgrade.html](https://www.postgresql.org/docs/current/pgupgrade.html) (accessed 27 September 2025).
+1. PostgreSQL Global Development Group, 'pg_upgrade', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/pgupgrade.html](https://www.postgresql.org/docs/current/pgupgrade.html).
 
-2. PostgreSQL Global Development Group, 'pg_upgrade source code (version.c)', *GitHub*, available at: [https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c](https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c) (accessed 27 September 2025).
+2. PostgreSQL Global Development Group, 'pg_upgrade source code (version.c)', _GitHub_, available at: [https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c](https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c).
 
-3. Amazon Web Services, 'Performing a major version upgrade', *Amazon Aurora User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html) (accessed 27 September 2025).
+3. Amazon Web Services, 'Performing a major version upgrade', _Amazon Aurora User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html).
 
-4. Amazon Web Services, 'Upgrading Amazon Aurora PostgreSQL DB clusters', *Amazon Aurora User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html) (accessed 27 September 2025).
+4. Amazon Web Services, 'Upgrading Amazon Aurora PostgreSQL DB clusters', _Amazon Aurora User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html).
 
-5. AWS Labs, 'pg-collector', *GitHub*, available at: [https://github.com/awslabs/pg-collector](https://github.com/awslabs/pg-collector) (accessed 27 September 2025).
+5. AWS Labs, 'pg-collector', _GitHub_, available at: [https://github.com/awslabs/pg-collector](https://github.com/awslabs/pg-collector).
 
-6. Amazon Web Services, 'Minimize downtime for RDS PostgreSQL major version upgrades', *AWS re:Post Knowledge Center*, available at: [https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade](https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade) (accessed 27 September 2025).
+6. Amazon Web Services, 'Minimize downtime for RDS PostgreSQL major version upgrades', _AWS re:Post Knowledge Center_, available at: [https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade](https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade).
 
-7. Khera, B., 'Why do large objects lead to slowness or failure of major version upgrades in RDS/Aurora PostgreSQL?', *AWS re:Post*, available at: [https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ](https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ) (accessed 27 September 2025).
+7. Khera, B., 'Why do large objects lead to slowness or failure of major version upgrades in RDS/Aurora PostgreSQL?', _AWS re:Post_, available at: [https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ](https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ).
 
-8. Amazon Web Services, 'Managing high object counts in Amazon Aurora PostgreSQL', *Amazon Aurora User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html) (accessed 27 September 2025).
+8. Amazon Web Services, 'Managing high object counts in Amazon Aurora PostgreSQL', _Amazon Aurora User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html).
 
-9. PostgreSQL Global Development Group, 'TOAST (The Oversized-Attribute Storage Technique)', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/storage-toast.html](https://www.postgresql.org/docs/current/storage-toast.html) (accessed 27 September 2025).
+9. PostgreSQL Global Development Group, 'TOAST (The Oversized-Attribute Storage Technique)', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/storage-toast.html](https://www.postgresql.org/docs/current/storage-toast.html).
 
-10. PostgreSQL Global Development Group, 'vacuumlo — remove orphaned large objects', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/vacuumlo.html](https://www.postgresql.org/docs/current/vacuumlo.html) (accessed 27 September 2025).
+10. PostgreSQL Global Development Group, 'vacuumlo — remove orphaned large objects', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/vacuumlo.html](https://www.postgresql.org/docs/current/vacuumlo.html).

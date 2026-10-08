@@ -29,9 +29,9 @@ This post is a tour of how to think about it on **MySQL 8+** and **Postgres 14+*
 
 Before getting into engine specifics, the framing that matters most:
 
-> Online DDL solves the *table-locking* problem. It does not solve the *deploy-atomicity* problem.
+> Online DDL solves the _table-locking_ problem. It does not solve the _deploy-atomicity_ problem.
 
-Even an instant DDL still needs a brief metadata-level lock to swap the table definition. If a long-running query — or just an idle-in-transaction session — is holding any lock on the table when your `ALTER` arrives, the `ALTER` waits. Worse, every statement that arrives *after* the `ALTER` queues behind it, because the queue is FIFO. What started as a millisecond DDL becomes an outage that lasts as long as that one slow query.
+Even an instant DDL still needs a brief metadata-level lock to swap the table definition. If a long-running query — or just an idle-in-transaction session — is holding any lock on the table when your `ALTER` arrives, the `ALTER` waits. Worse, every statement that arrives _after_ the `ALTER` queues behind it, because the queue is FIFO. What started as a millisecond DDL becomes an outage that lasts as long as that one slow query.
 
 Separately, your application doesn't deploy atomically. A rolling rollout means v1 pods (which write to the old schema) run alongside v2 pods (which write to the new) for minutes at a time. If the schema change is anything more than purely additive, you can lose data in that window unless the application is explicitly tolerant of mixed schemas.
 
@@ -67,7 +67,7 @@ A table-rebuilding `ALTER` or `OPTIMIZE TABLE` resets `TOTAL_ROW_VERSIONS` to 0.
 
 INPLACE rebuilds the data using an online log to capture concurrent DML, allowing reads and writes throughout most of the operation. Brief exclusive metadata locks bookend the run. Cost scales with table size — hours for terabyte tables, with extra IO and tablespace.
 
-This is what you fall through to for changes INSTANT won't take: adding a column on a `COMPRESSED` table, certain primary-key changes, virtual generated columns being added to a *non-partitioned* table (partitioned tables block INPLACE for virtual columns).
+This is what you fall through to for changes INSTANT won't take: adding a column on a `COMPRESSED` table, certain primary-key changes, virtual generated columns being added to a _non-partitioned_ table (partitioned tables block INPLACE for virtual columns).
 
 ### `ALGORITHM=COPY` — the one to avoid
 
@@ -77,13 +77,13 @@ If you find yourself looking at COPY, that's the signal to use one of the OSS to
 
 ### Replication implications
 
-INSTANT DDL flows statement-by-statement through replication. Each replica executes the same `ALTER` and applies it instantly too — *if* it's also on 8.0.29+. Mixed-version topologies (primary on 8.0.29+ writing INSTANT shapes, replica on something older) will fail replay. Treat 8.0.29 as a hard floor before you start using the new INSTANT shapes routinely.
+INSTANT DDL flows statement-by-statement through replication. Each replica executes the same `ALTER` and applies it instantly too — _if_ it's also on 8.0.29+. Mixed-version topologies (primary on 8.0.29+ writing INSTANT shapes, replica on something older) will fail replay. Treat 8.0.29 as a hard floor before you start using the new INSTANT shapes routinely.
 
 INPLACE and COPY ALTERs serialize on the SQL applier and lag replicas for the full duration. Plan accordingly.
 
 ### The MDL pile-up — the real production failure mode
 
-Even an instant-class DDL needs a brief exclusive metadata lock. If a long-running transaction has *any* lock on the target table — including just holding a result set open with the table referenced — the `ALTER` waits behind it, and every subsequent query queues behind the `ALTER`. Twenty seconds of "instant" DDL becomes a queue of thousands of stuck connections, and the symptom is indistinguishable from the database being down.
+Even an instant-class DDL needs a brief exclusive metadata lock. If a long-running transaction has _any_ lock on the target table — including just holding a result set open with the table referenced — the `ALTER` waits behind it, and every subsequent query queues behind the `ALTER`. Twenty seconds of "instant" DDL becomes a queue of thousands of stuck connections, and the symptom is indistinguishable from the database being down.
 
 Mitigations are non-optional:
 
@@ -97,13 +97,13 @@ Mitigations are non-optional:
 
 ## 3. Postgres 14+: ALTER TABLE and the lock-mode lottery
 
-Postgres takes a different approach. There's no `ALGORITHM=` knob, but there are sharp rules about which sub-operations rewrite the table, which scan it, and which are pure metadata. The default lock for `ALTER TABLE` is `ACCESS EXCLUSIVE` "unless explicitly noted" ([docs](https://www.postgresql.org/docs/current/sql-altertable.html)) — and `ACCESS EXCLUSIVE` blocks everything, including reads. So the game is structuring your change to *avoid* either a rewrite or a long scan while holding that lock.
+Postgres takes a different approach. There's no `ALGORITHM=` knob, but there are sharp rules about which sub-operations rewrite the table, which scan it, and which are pure metadata. The default lock for `ALTER TABLE` is `ACCESS EXCLUSIVE` "unless explicitly noted" ([docs](https://www.postgresql.org/docs/current/sql-altertable.html)) — and `ACCESS EXCLUSIVE` blocks everything, including reads. So the game is structuring your change to _avoid_ either a rewrite or a long scan while holding that lock.
 
 ### `ADD COLUMN` — the rewrite vs. metadata distinction
 
 This is the headline number, straight from the docs:
 
-> *When a column is added with ADD COLUMN and a non-volatile DEFAULT is specified, the default value is evaluated at the time of the statement and the result stored in the table's metadata, where it will be returned when any existing rows are accessed. The value will be only applied when the table is rewritten, making the ALTER TABLE very fast even on large tables.*
+> _When a column is added with ADD COLUMN and a non-volatile DEFAULT is specified, the default value is evaluated at the time of the statement and the result stored in the table's metadata, where it will be returned when any existing rows are accessed. The value will be only applied when the table is rewritten, making the ALTER TABLE very fast even on large tables._
 
 This is the **fast-default** optimisation, [introduced in PG 11](https://www.postgresql.org/docs/release/11.0/) ("Allow ALTER TABLE to add a column with a non-null default without doing a table rewrite … This is enabled when the default value is a constant.") and present in every major version since.
 
@@ -183,15 +183,15 @@ This prevents the cascading pileup: the DDL either gets the lock quickly or back
 
 ### Logical replication
 
-DDL is *not* automatically replicated through logical replication in PG 14+. If you're using logical replication for HA, cross-region copies, or zero-downtime version upgrades, you have to apply schema changes on each side. PG 16 added some primitives for replicating DDL but it's still off by default and limited; treat schema as a per-cluster operation.
+DDL is _not_ automatically replicated through logical replication in PG 14+. If you're using logical replication for HA, cross-region copies, or zero-downtime version upgrades, you have to apply schema changes on each side. PG 16 added some primitives for replicating DDL but it's still off by default and limited; treat schema as a per-cluster operation.
 
 ---
 
 ## 4. Expand-contract: the pattern that actually wins
 
-This is the part you'll keep coming back to. Engine capabilities tell you what's *possible* in a single DDL; expand-contract tells you how to evolve the schema *across* a rolling deploy without ever requiring the database and the application fleet to be in lockstep.
+This is the part you'll keep coming back to. Engine capabilities tell you what's _possible_ in a single DDL; expand-contract tells you how to evolve the schema _across_ a rolling deploy without ever requiring the database and the application fleet to be in lockstep.
 
-The pattern, originally [Martin Fowler's "Parallel Change"](https://martinfowler.com/bliki/ParallelChange.html) and later catalogued in Sadalage and Ambler's *Refactoring Databases*, looks like this when you're adding a column:
+The pattern, originally [Martin Fowler's "Parallel Change"](https://martinfowler.com/bliki/ParallelChange.html) and later catalogued in Sadalage and Ambler's _Refactoring Databases_, looks like this when you're adding a column:
 
 1. **Expand.** Add the new column as nullable with a safe constant default. No app change. Old code unaffected because nothing references the new column yet.
 2. **Dual-write.** Deploy code that writes to both old and new columns on every INSERT/UPDATE. Reads still come from the old. This step is what makes the application tolerant of mixed-version peers during the rollout — v1 pods write only to old, v2 pods write to both, and both behaviours are correct.
@@ -202,7 +202,7 @@ The pattern, originally [Martin Fowler's "Parallel Change"](https://martinfowler
 
 Each step is independently reversible. At no point does correctness depend on the database and every application replica cutting over in the same instant.
 
-It looks like a lot of steps because it is. The point is that each one is *boring*. You can pause for a week between any two of them. A typo in step 4 doesn't corrupt data — it just lets you roll back.
+It looks like a lot of steps because it is. The point is that each one is _boring_. You can pause for a week between any two of them. A typo in step 4 doesn't corrupt data — it just lets you roll back.
 
 ### Why this beats "just use online DDL"
 
@@ -235,23 +235,23 @@ The repo activity below was pulled from the GitHub API on 2026-05-21 — verify 
 
 ### MySQL
 
-**[pt-online-schema-change](https://github.com/percona/percona-toolkit) (Percona Toolkit)** — *Trigger-based.* Creates a shadow table, installs `AFTER INSERT/UPDATE/DELETE` triggers on the original to mirror writes, chunk-copies existing rows, atomic rename at the end. The industry workhorse since the early 2010s. Very mature; handles almost any DDL. Triggers double the write cost on the source table during the run; foreign keys are painful (`--alter-foreign-keys-method` has three modes, each with sharp edges). Actively maintained.
+**[pt-online-schema-change](https://github.com/percona/percona-toolkit) (Percona Toolkit)** — _Trigger-based._ Creates a shadow table, installs `AFTER INSERT/UPDATE/DELETE` triggers on the original to mirror writes, chunk-copies existing rows, atomic rename at the end. The industry workhorse since the early 2010s. Very mature; handles almost any DDL. Triggers double the write cost on the source table during the run; foreign keys are painful (`--alter-foreign-keys-method` has three modes, each with sharp edges). Actively maintained.
 
-**[gh-ost](https://github.com/github/gh-ost) (GitHub)** — *Binlog-based, no triggers.* Connects as a replica, tails the binlog to apply concurrent DML to the ghost table while chunk-copying rows, atomic rename at the end. Lower and more predictable write overhead than triggers; can throttle on replica lag, custom queries, or load metrics; can pause and resume; can hand off the cut-over to a human. Foreign keys essentially unsupported. Requires `binlog_format=ROW` and `binlog_row_image=FULL`. Actively maintained — v1.1.9 GA on 2026-05-01, recent commits in the repo today.
+**[gh-ost](https://github.com/github/gh-ost) (GitHub)** — _Binlog-based, no triggers._ Connects as a replica, tails the binlog to apply concurrent DML to the ghost table while chunk-copying rows, atomic rename at the end. Lower and more predictable write overhead than triggers; can throttle on replica lag, custom queries, or load metrics; can pause and resume; can hand off the cut-over to a human. Foreign keys essentially unsupported. Requires `binlog_format=ROW` and `binlog_row_image=FULL`. Actively maintained — v1.1.9 GA on 2026-05-01, recent commits in the repo today.
 
-**[Spirit](https://github.com/block/spirit) (Block / formerly Cashapp)** — *Hybrid.* Uses MySQL 8.0's native INSTANT/INPLACE algorithms when the DDL qualifies, falls back to a gh-ost-style binlog-tailed copy when it doesn't. Designed to be invoked inline by application deploy pipelines rather than as a long-lived ops process. MySQL 8.0+ only. Younger and narrower than gh-ost; smaller community. Actively maintained.
+**[Spirit](https://github.com/block/spirit) (Block / formerly Cashapp)** — _Hybrid._ Uses MySQL 8.0's native INSTANT/INPLACE algorithms when the DDL qualifies, falls back to a gh-ost-style binlog-tailed copy when it doesn't. Designed to be invoked inline by application deploy pipelines rather than as a long-lived ops process. MySQL 8.0+ only. Younger and narrower than gh-ost; smaller community. Actively maintained.
 
-This INSTANT-first approach is worth internalising as a principle: why copy 500 GB of data if the engine can do it in milliseconds? Spirit codifies what you should be doing mentally — check INSTANT first, fall back to copy only when you must. Its parallel copy threads and delta-map deduplication also make it significantly faster than gh-ost when a copy *is* needed (CashApp reports 5x+ improvements on large tables when the buffer pool can hold secondary indexes).
+This INSTANT-first approach is worth internalising as a principle: why copy 500 GB of data if the engine can do it in milliseconds? Spirit codifies what you should be doing mentally — check INSTANT first, fall back to copy only when you must. Its parallel copy threads and delta-map deduplication also make it significantly faster than gh-ost when a copy _is_ needed (CashApp reports 5x+ improvements on large tables when the buffer pool can hold secondary indexes).
 
 ### Postgres
 
-**[pg_repack](https://github.com/reorg/pg_repack)** — *Trigger-based, but for table rewriting, not online ALTER.* Worth listing because it gets confused with online-DDL tools. It does online table rebuilds (the `VACUUM FULL` replacement) and re-clustering, but it cannot add or drop columns. You use it to clean up bloat *after* you've evolved the schema some other way.
+**[pg_repack](https://github.com/reorg/pg_repack)** — _Trigger-based, but for table rewriting, not online ALTER._ Worth listing because it gets confused with online-DDL tools. It does online table rebuilds (the `VACUUM FULL` replacement) and re-clustering, but it cannot add or drop columns. You use it to clean up bloat _after_ you've evolved the schema some other way.
 
-**[pg-osc](https://github.com/shayonj/pg-osc)** — *Trigger-based.* The pt-osc model ported to Postgres: shadow table, triggers mirror writes, chunk-copy backfill, swap. Familiar mental model for teams coming from MySQL. Same trigger write-amplification cost as pt-osc. Works for column type changes and other DDL that PG won't do without rewriting. Single-maintainer; commits in 2026 but slower cadence than the bigger projects.
+**[pg-osc](https://github.com/shayonj/pg-osc)** — _Trigger-based._ The pt-osc model ported to Postgres: shadow table, triggers mirror writes, chunk-copy backfill, swap. Familiar mental model for teams coming from MySQL. Same trigger write-amplification cost as pt-osc. Works for column type changes and other DDL that PG won't do without rewriting. Single-maintainer; commits in 2026 but slower cadence than the bigger projects.
 
-**[pgroll](https://github.com/xataio/pgroll) (Xata)** — *Multi-version schema using views.* A genuinely different mechanism: each migration creates new views over the underlying tables, with triggers translating writes between the old and new shapes. Old and new application versions read/write their own view set simultaneously. You `complete` the migration when all clients have moved. PG 14+. Declarative JSON migration spec; reversible until completion. Application has to connect to the right schema; ORMs that introspect schemas can get confused. Actively maintained.
+**[pgroll](https://github.com/xataio/pgroll) (Xata)** — _Multi-version schema using views._ A genuinely different mechanism: each migration creates new views over the underlying tables, with triggers translating writes between the old and new shapes. Old and new application versions read/write their own view set simultaneously. You `complete` the migration when all clients have moved. PG 14+. Declarative JSON migration spec; reversible until completion. Application has to connect to the right schema; ORMs that introspect schemas can get confused. Actively maintained.
 
-**[Reshape](https://github.com/fabianlindfors/reshape)** — *Multi-version schema using views.* Same idea as pgroll, predates it, influenced its design. Rust implementation, TOML migration files. Slower release cadence in 2026; pgroll has more momentum in this category.
+**[Reshape](https://github.com/fabianlindfors/reshape)** — _Multi-version schema using views._ Same idea as pgroll, predates it, influenced its design. Rust implementation, TOML migration files. Slower release cadence in 2026; pgroll has more momentum in this category.
 
 ### Orchestrators (a layer up)
 
@@ -263,7 +263,7 @@ The conversation in 2026 has shifted from "which copy tool" toward "which orches
 
 ### Out of scope (but readers will ask)
 
-**Liquibase** and **Flyway** are migration *runners* — they sequence and version your DDL but don't perform online ALTERs themselves. You'd use them to drive the *steps* of the expand-contract pattern, with one of the tools above (or native DDL) doing the actual mechanism for any step that needs it.
+**Liquibase** and **Flyway** are migration _runners_ — they sequence and version your DDL but don't perform online ALTERs themselves. You'd use them to drive the _steps_ of the expand-contract pattern, with one of the tools above (or native DDL) doing the actual mechanism for any step that needs it.
 
 ---
 
@@ -311,7 +311,7 @@ The catch is application coordination, not the DDL itself. If v1 pods are still 
 
 This is the one with no shortcut. Both engines support it as a fast, lock-light operation:
 
-- **MySQL 8.0.28+** added `ALGORITHM=INSTANT` for renames, *unless* the column is referenced by a foreign key in another table — that case requires `ALGORITHM=INPLACE`.
+- **MySQL 8.0.28+** added `ALGORITHM=INSTANT` for renames, _unless_ the column is referenced by a foreign key in another table — that case requires `ALGORITHM=INPLACE`.
 - **Postgres** takes `ACCESS EXCLUSIVE` briefly to flip the catalog. Same MDL pile-up risk as any other DDL; use `lock_timeout`.
 
 But the DDL being fast doesn't matter, because the application can't atomically rename a column. v1 code references the old name; v2 code references the new name; they coexist for the duration of a rolling deploy. The only safe path is full expand-contract: add new column, dual-write, backfill, switch reads, stop writing old, drop old. There is no shortcut.
@@ -320,20 +320,20 @@ But the DDL being fast doesn't matter, because the application can't atomically 
 
 ## 8. Quick reference: MySQL vs PostgreSQL side-by-side
 
-| Operation | MySQL 8.0+ | PostgreSQL 14+ |
-|-----------|-----------|----------------|
-| ADD COLUMN + constant default | INSTANT (8.0.29+ any position; 8.0.12 last only) | Instant (metadata-only since PG 11) |
-| ADD COLUMN + volatile default | INPLACE (table rebuild, allows DML) | ACCESS EXCLUSIVE (full rewrite) |
-| DROP COLUMN | INSTANT (8.0.29+) | Instant (marks dropped, no rewrite) |
-| RENAME COLUMN | INSTANT (8.0.28+) | Brief ACCESS EXCLUSIVE (catalog flip) |
-| ADD INDEX | INPLACE, LOCK=NONE (blocks replicas) | CREATE INDEX CONCURRENTLY (blocks nothing) |
-| SET NOT NULL | INPLACE, LOCK=NONE (blocks replicas) | CHECK trick: no blocking (PG 12+) |
-| Change type (rewrite needed) | COPY or external tool | Expand/contract or pg-osc |
-| Lock queue mitigation | `lock_wait_timeout` + retry | `lock_timeout` + retry |
-| Replica impact of native DDL | Blocks replicas for full duration | Physical: replays instantly; Logical: manual DDL |
-| Best external tool (general) | gh-ost (no triggers, runtime control) | pgroll (multi-version schema) |
-| Best external tool (FK tables) | pt-online-schema-change | pg-osc |
-| Managed Blue/Green | RDS/Aurora Blue/Green Deployments | Aurora PG Blue/Green (PG 11.21+) |
+| Operation                      | MySQL 8.0+                                       | PostgreSQL 14+                                   |
+| ------------------------------ | ------------------------------------------------ | ------------------------------------------------ |
+| ADD COLUMN + constant default  | INSTANT (8.0.29+ any position; 8.0.12 last only) | Instant (metadata-only since PG 11)              |
+| ADD COLUMN + volatile default  | INPLACE (table rebuild, allows DML)              | ACCESS EXCLUSIVE (full rewrite)                  |
+| DROP COLUMN                    | INSTANT (8.0.29+)                                | Instant (marks dropped, no rewrite)              |
+| RENAME COLUMN                  | INSTANT (8.0.28+)                                | Brief ACCESS EXCLUSIVE (catalog flip)            |
+| ADD INDEX                      | INPLACE, LOCK=NONE (blocks replicas)             | CREATE INDEX CONCURRENTLY (blocks nothing)       |
+| SET NOT NULL                   | INPLACE, LOCK=NONE (blocks replicas)             | CHECK trick: no blocking (PG 12+)                |
+| Change type (rewrite needed)   | COPY or external tool                            | Expand/contract or pg-osc                        |
+| Lock queue mitigation          | `lock_wait_timeout` + retry                      | `lock_timeout` + retry                           |
+| Replica impact of native DDL   | Blocks replicas for full duration                | Physical: replays instantly; Logical: manual DDL |
+| Best external tool (general)   | gh-ost (no triggers, runtime control)            | pgroll (multi-version schema)                    |
+| Best external tool (FK tables) | pt-online-schema-change                          | pg-osc                                           |
+| Managed Blue/Green             | RDS/Aurora Blue/Green Deployments                | Aurora PG Blue/Green (PG 11.21+)                 |
 
 ---
 
@@ -362,28 +362,28 @@ The schema change is rarely the hard part. The choreography is.
 
 ## References
 
-1. Oracle Corporation, 'InnoDB Online DDL Operations', *MySQL 8.0 Reference Manual*, available at: [https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html) (accessed 1 May 2025).
+1. Oracle Corporation, 'InnoDB Online DDL Operations', _MySQL 8.0 Reference Manual_, available at: [https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html).
 
-2. Oracle Corporation, 'MySQL 8.0: InnoDB now supports Instant ADD/DROP Columns', *MySQL Server Blog*, available at: [https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns](https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns) (accessed 1 May 2025).
+2. Oracle Corporation, 'MySQL 8.0: InnoDB now supports Instant ADD/DROP Columns', _MySQL Server Blog_, available at: [https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns](https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns).
 
-3. PostgreSQL Global Development Group, 'ALTER TABLE', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/sql-altertable.html](https://www.postgresql.org/docs/current/sql-altertable.html) (accessed 1 May 2025).
+3. PostgreSQL Global Development Group, 'ALTER TABLE', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/sql-altertable.html](https://www.postgresql.org/docs/current/sql-altertable.html).
 
-4. PostgreSQL Global Development Group, 'Building Indexes Concurrently', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/sql-createindex.html](https://www.postgresql.org/docs/current/sql-createindex.html) (accessed 1 May 2025).
+4. PostgreSQL Global Development Group, 'Building Indexes Concurrently', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/sql-createindex.html](https://www.postgresql.org/docs/current/sql-createindex.html).
 
-5. GitHub, 'gh-ost: GitHub's Online Schema-migration Tool for MySQL', available at: [https://github.com/github/gh-ost](https://github.com/github/gh-ost) (accessed 1 May 2025).
+5. GitHub, 'gh-ost: GitHub's Online Schema-migration Tool for MySQL', available at: [https://github.com/github/gh-ost](https://github.com/github/gh-ost).
 
-6. Percona, 'pt-online-schema-change', *Percona Toolkit Documentation*, available at: [https://docs.percona.com/percona-toolkit/pt-online-schema-change.html](https://docs.percona.com/percona-toolkit/pt-online-schema-change.html) (accessed 1 May 2025).
+6. Percona, 'pt-online-schema-change', _Percona Toolkit Documentation_, available at: [https://docs.percona.com/percona-toolkit/pt-online-schema-change.html](https://docs.percona.com/percona-toolkit/pt-online-schema-change.html).
 
-7. Block Inc., 'Introducing Spirit', *CashApp Code Blog*, available at: [https://code.cash.app/introducing-spirit](https://code.cash.app/introducing-spirit) (accessed 1 May 2025).
+7. Block Inc., 'Introducing Spirit', _CashApp Code Blog_, available at: [https://code.cash.app/introducing-spirit](https://code.cash.app/introducing-spirit).
 
-8. Xata, 'pgroll: Zero-downtime, reversible, schema migrations for PostgreSQL', available at: [https://github.com/xataio/pgroll](https://github.com/xataio/pgroll) (accessed 1 May 2025).
+8. Xata, 'pgroll: Zero-downtime, reversible, schema migrations for PostgreSQL', available at: [https://github.com/xataio/pgroll](https://github.com/xataio/pgroll).
 
-9. Samokhvalov, N., 'Zero-downtime Postgres schema migrations need this: lock_timeout and retries', *postgres.ai*, available at: [https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries) (accessed 1 May 2025).
+9. Samokhvalov, N., 'Zero-downtime Postgres schema migrations need this: lock_timeout and retries', _postgres.ai_, available at: [https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries).
 
-10. Fowler, M., 'Parallel Change', *martinfowler.com*, available at: [https://martinfowler.com/bliki/ParallelChange.html](https://martinfowler.com/bliki/ParallelChange.html) (accessed 1 May 2025).
+10. Fowler, M., 'Parallel Change', _martinfowler.com_, available at: [https://martinfowler.com/bliki/ParallelChange.html](https://martinfowler.com/bliki/ParallelChange.html).
 
-11. Stripe Engineering, 'Online migrations at scale', *Stripe Blog*, available at: [https://stripe.com/blog/online-migrations](https://stripe.com/blog/online-migrations) (accessed 1 May 2025).
+11. Stripe Engineering, 'Online migrations at scale', _Stripe Blog_, available at: [https://stripe.com/blog/online-migrations](https://stripe.com/blog/online-migrations).
 
-12. pg_repack Development Team, 'pg_repack — Reorganize tables in PostgreSQL databases with minimal locks', available at: [https://github.com/reorg/pg_repack](https://github.com/reorg/pg_repack) (accessed 1 May 2025).
+12. pg_repack Development Team, 'pg_repack — Reorganize tables in PostgreSQL databases with minimal locks', available at: [https://github.com/reorg/pg_repack](https://github.com/reorg/pg_repack).
 
-13. Amazon Web Services, 'Using Amazon RDS Blue/Green Deployments for database updates', *Amazon RDS User Guide*, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/blue-green-deployments-overview.html](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/blue-green-deployments-overview.html) (accessed 1 May 2025).
+13. Amazon Web Services, 'Using Amazon RDS Blue/Green Deployments for database updates', _Amazon RDS User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/blue-green-deployments-overview.html](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/blue-green-deployments-overview.html).

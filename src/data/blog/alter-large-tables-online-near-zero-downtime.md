@@ -24,6 +24,7 @@ This post covers every viable option I know of, when to use each one, and the go
 ## The Core Problem
 
 Altering a table's schema traditionally meant:
+
 1. Lock the table (block all reads and writes)
 2. Rewrite every row with the new structure
 3. Rebuild all indexes
@@ -60,6 +61,7 @@ ALTER TABLE orders RENAME COLUMN ship_date TO shipped_at, ALGORITHM=INSTANT;
 **How it works:** MySQL uses a row-versioning system. Each INSTANT change creates a new "row version." When reading older rows, InnoDB checks the version stamp and supplies defaults for added columns or skips dropped ones.
 
 **What supports INSTANT:**
+
 - ADD COLUMN (any position, 8.0.29+; last position only in 8.0.12–8.0.28)
 - DROP COLUMN (8.0.29+)
 - RENAME COLUMN (8.0.28+)
@@ -68,6 +70,7 @@ ALTER TABLE orders RENAME COLUMN ship_date TO shipped_at, ALGORITHM=INSTANT;
 - Add/drop virtual generated columns
 
 **What doesn't:**
+
 - Adding an auto-increment column
 - Any change to `ROW_FORMAT=COMPRESSED` tables
 - Tables with FULLTEXT indexes
@@ -94,6 +97,7 @@ ALTER TABLE orders MODIFY COLUMN email VARCHAR(255) NOT NULL, ALGORITHM=INPLACE,
 If your replicas serve read traffic (and they probably do), native INPLACE DDL on large tables is dangerous.
 
 **When it's safe to use:**
+
 - Tables under ~10GB
 - No replicas serving production traffic
 - You can tolerate replica lag equal to the DDL duration
@@ -116,12 +120,14 @@ gh-ost \
 How it works: Creates a "ghost" table with the new schema, copies rows in chunks, and simultaneously tails the binlog to replay ongoing changes. Cut-over is a brief table rename.
 
 Advantages:
+
 - No triggers (zero write amplification on the source)
 - Runtime control — pause, throttle, postpone cut-over via Unix socket
 - Can read binlog from a replica to reduce primary load
 - Works on tables with existing triggers
 
 Limitations:
+
 - Requires Row-Based Replication (RBR)
 - No foreign key support
 - Not resumable — if it dies, you restart from scratch
@@ -139,11 +145,13 @@ pt-online-schema-change \
 How it works: Creates a shadow table, installs AFTER triggers on the original to sync ongoing DML, copies rows in chunks, then does an atomic RENAME.
 
 Advantages:
+
 - Handles foreign keys (`--alter-foreign-keys-method`)
 - Works with both SBR and RBR
 - Resumable with `--resume`
 
 Limitations:
+
 - Cannot operate on tables that already have triggers
 - Trigger overhead (~2x write cost during migration)
 - Deadlock-prone under heavy concurrent writes
@@ -160,12 +168,14 @@ spirit --host primary.db --database myapp --table orders \
 Key differentiator: **Tries INSTANT first.** If the operation supports `ALGORITHM=INSTANT`, Spirit applies it immediately and exits. Otherwise, it falls back to binlog-based migration with parallel copy threads and a delta-map that deduplicates binlog changes.
 
 Advantages:
+
 - INSTANT-first approach (why copy 500GB if you don't have to?)
 - Parallel copy threads (significantly faster than gh-ost)
 - Resumable (Kubernetes-friendly — kill and restart safely)
 - Checksum verification during copy
 
 Limitations:
+
 - MySQL 8.0+ only
 - Requires RBR
 - No foreign key support
@@ -260,10 +270,12 @@ DROP INDEX CONCURRENTLY idx_orders_customer;
 ### Column Type Changes
 
 Some type changes are instant (binary coercible):
+
 - `varchar(100)` → `varchar(200)` (increasing length)
 - `varchar(N)` → `text`
 
 Others require a full table rewrite under ACCESS EXCLUSIVE:
+
 - `integer` → `bigint`
 - `timestamp` → `timestamptz`
 - Any change requiring data transformation
@@ -340,14 +352,13 @@ Is the operation metadata-only?
 When nothing else works — a type change that requires a rewrite, a complex structural change — the expand/contract pattern is your universal fallback. It works on both MySQL and PostgreSQL, any version, any hosting.
 
 **Expand phase:**
+
 1. Add new column (instant on both engines)
 2. Deploy code that writes to BOTH old and new columns
 3. Backfill existing rows in batches
 4. Deploy code that reads from new column
 
-**Contract phase:**
-5. Deploy code that stops writing to old column
-6. Drop old column (instant on both engines)
+**Contract phase:** 5. Deploy code that stops writing to old column 6. Drop old column (instant on both engines)
 
 ```sql
 -- Step 1: Add new column (instant)
@@ -368,16 +379,16 @@ The key: **at no point is the table locked for more than milliseconds.** The bac
 
 ## Side-by-Side Comparison
 
-| Operation | MySQL 8.0+ | PostgreSQL 14+ |
-|-----------|-----------|----------------|
-| ADD COLUMN + default | INSTANT (8.0.29+, any position) | Instant (since PG 11, constant default only) |
-| DROP COLUMN | INSTANT (8.0.29+) | Instant (always) |
-| RENAME COLUMN | INSTANT (8.0.28+) | Instant (always) |
-| ADD INDEX | INPLACE, LOCK=NONE (blocks replicas) | CONCURRENTLY (blocks nothing) |
-| SET NOT NULL | INPLACE, LOCK=NONE (blocks replicas) | CHECK trick (blocks nothing) |
-| Change type (rewrite) | External tool or expand/contract | Expand/contract |
-| FK support in tools | pt-osc only | pg_repack |
-| Replica-safe large DDL | Requires external tool | Mostly native |
+| Operation              | MySQL 8.0+                           | PostgreSQL 14+                               |
+| ---------------------- | ------------------------------------ | -------------------------------------------- |
+| ADD COLUMN + default   | INSTANT (8.0.29+, any position)      | Instant (since PG 11, constant default only) |
+| DROP COLUMN            | INSTANT (8.0.29+)                    | Instant (always)                             |
+| RENAME COLUMN          | INSTANT (8.0.28+)                    | Instant (always)                             |
+| ADD INDEX              | INPLACE, LOCK=NONE (blocks replicas) | CONCURRENTLY (blocks nothing)                |
+| SET NOT NULL           | INPLACE, LOCK=NONE (blocks replicas) | CHECK trick (blocks nothing)                 |
+| Change type (rewrite)  | External tool or expand/contract     | Expand/contract                              |
+| FK support in tools    | pt-osc only                          | pg_repack                                    |
+| Replica-safe large DDL | Requires external tool               | Mostly native                                |
 
 ## Key Takeaways
 
@@ -395,22 +406,22 @@ The key: **at no point is the table locked for more than milliseconds.** The bac
 
 ## References
 
-1. Oracle Corporation, 'InnoDB Online DDL Operations', *MySQL 8.0 Reference Manual*, available at: [https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html) (accessed 1 May 2025).
+1. Oracle Corporation, 'InnoDB Online DDL Operations', _MySQL 8.0 Reference Manual_, available at: [https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html).
 
-2. Oracle Corporation, 'MySQL 8.0: InnoDB now supports Instant ADD/DROP Columns', *MySQL Server Blog*, available at: [https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns](https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns) (accessed 1 May 2025).
+2. Oracle Corporation, 'MySQL 8.0: InnoDB now supports Instant ADD/DROP Columns', _MySQL Server Blog_, available at: [https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns](https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns).
 
-3. PostgreSQL Global Development Group, 'ALTER TABLE', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/sql-altertable.html](https://www.postgresql.org/docs/current/sql-altertable.html) (accessed 1 May 2025).
+3. PostgreSQL Global Development Group, 'ALTER TABLE', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/sql-altertable.html](https://www.postgresql.org/docs/current/sql-altertable.html).
 
-4. PostgreSQL Global Development Group, 'Building Indexes Concurrently', *PostgreSQL Documentation*, available at: [https://www.postgresql.org/docs/current/sql-createindex.html](https://www.postgresql.org/docs/current/sql-createindex.html) (accessed 1 May 2025).
+4. PostgreSQL Global Development Group, 'Building Indexes Concurrently', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/sql-createindex.html](https://www.postgresql.org/docs/current/sql-createindex.html).
 
-5. GitHub, 'gh-ost: GitHub's Online Schema-migration Tool for MySQL', *GitHub*, available at: [https://github.com/github/gh-ost](https://github.com/github/gh-ost) (accessed 1 May 2025).
+5. GitHub, 'gh-ost: GitHub's Online Schema-migration Tool for MySQL', _GitHub_, available at: [https://github.com/github/gh-ost](https://github.com/github/gh-ost).
 
-6. Percona, 'pt-online-schema-change', *Percona Toolkit Documentation*, available at: [https://docs.percona.com/percona-toolkit/pt-online-schema-change.html](https://docs.percona.com/percona-toolkit/pt-online-schema-change.html) (accessed 1 May 2025).
+6. Percona, 'pt-online-schema-change', _Percona Toolkit Documentation_, available at: [https://docs.percona.com/percona-toolkit/pt-online-schema-change.html](https://docs.percona.com/percona-toolkit/pt-online-schema-change.html).
 
-7. Block Inc., 'Introducing Spirit', *CashApp Code Blog*, available at: [https://code.cash.app/introducing-spirit](https://code.cash.app/introducing-spirit) (accessed 1 May 2025).
+7. Block Inc., 'Introducing Spirit', _CashApp Code Blog_, available at: [https://code.cash.app/introducing-spirit](https://code.cash.app/introducing-spirit).
 
-8. pg_repack Development Team, 'pg_repack — Reorganize tables in PostgreSQL databases with minimal locks', *GitHub*, available at: [https://github.com/reorg/pg_repack](https://github.com/reorg/pg_repack) (accessed 1 May 2025).
+8. pg_repack Development Team, 'pg_repack — Reorganize tables in PostgreSQL databases with minimal locks', _GitHub_, available at: [https://github.com/reorg/pg_repack](https://github.com/reorg/pg_repack).
 
-9. Xata, 'pgroll: Zero-downtime, reversible, schema migrations for PostgreSQL', *GitHub*, available at: [https://github.com/xataio/pgroll](https://github.com/xataio/pgroll) (accessed 1 May 2025).
+9. Xata, 'pgroll: Zero-downtime, reversible, schema migrations for PostgreSQL', _GitHub_, available at: [https://github.com/xataio/pgroll](https://github.com/xataio/pgroll).
 
-10. Nikolay Samokhvalov, 'Zero-downtime Postgres schema migrations need this: lock_timeout and retries', *postgres.ai*, available at: [https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries) (accessed 1 May 2025).
+10. Nikolay Samokhvalov, 'Zero-downtime Postgres schema migrations need this: lock_timeout and retries', _postgres.ai_, available at: [https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries).

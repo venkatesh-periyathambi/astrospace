@@ -87,7 +87,7 @@ Here's the fundamental problem:
 
 MySQL 5.7 does not guarantee ACID properties for schema changes. If something goes wrong mid-DDL, you can end up with one dictionary knowing about a table and the other not.
 
-> **Note on Aurora MySQL v2:** While Aurora's distributed storage layer provides superior crash safety for *data*, the MySQL-layer dictionary operations still follow the same non-transactional DDL behavior as community MySQL 5.7.
+> **Note on Aurora MySQL v2:** While Aurora's distributed storage layer provides superior crash safety for _data_, the MySQL-layer dictionary operations still follow the same non-transactional DDL behavior as community MySQL 5.7.
 
 ### The Root Cause (MySQL 8.0 / Aurora v3)
 
@@ -98,6 +98,7 @@ MySQL 8.0 introduced **Atomic DDL**, which means DDL statements are now crash-sa
 When your data dictionary is inconsistent, you'll typically see:
 
 **User-reported symptoms:**
+
 - "I can't access a table"
 - "A table disappeared"
 - "I can't drop this table"
@@ -142,7 +143,7 @@ SET foreign_key_checks = 1;
 
 The MySQL documentation explicitly warns about this:
 
-> *"With foreign_key_checks=0, dropping an index required by a foreign key constraint places the table in an inconsistent state and causes the foreign key check that occurs at table load to fail."*
+> _"With foreign_key_checks=0, dropping an index required by a foreign key constraint places the table in an inconsistent state and causes the foreign key check that occurs at table load to fail."_
 
 When MySQL detects the FK relationship is broken, it refuses to load **both** tables involved in the relationship.
 
@@ -152,12 +153,13 @@ When MySQL detects the FK relationship is broken, it refuses to load **both** ta
 
 If MySQL crashes (OOM, storage full, hardware failure, or even a MySQL bug) while a DDL is in progress:
 
-| Version | Risk Level | Why |
-|---------|-----------|-----|
-| MySQL 5.7 / Aurora v2 | **High** | DDL is non-transactional. Crash = partial state. |
-| MySQL 8.0 / Aurora v3 | **Low** | Atomic DDL rolls back incomplete operations. |
+| Version               | Risk Level | Why                                              |
+| --------------------- | ---------- | ------------------------------------------------ |
+| MySQL 5.7 / Aurora v2 | **High**   | DDL is non-transactional. Crash = partial state. |
+| MySQL 8.0 / Aurora v3 | **Low**    | Atomic DDL rolls back incomplete operations.     |
 
 On MySQL 5.7, a crash mid-DDL can leave behind:
+
 - Orphaned tablespace files (`.ibd`) without matching `.frm` files
 - `.frm` files pointing to non-existent tablespaces
 - InnoDB dictionary entries with no filesystem counterpart
@@ -209,6 +211,7 @@ SELECT COUNT(*) FROM mydb.orders;
 ```
 
 **If the table comes back:** The issue is a broken FK relationship. Fix it by:
+
 1. Reviewing the [MySQL Foreign Key documentation](https://dev.mysql.com/doc/refman/8.0/en/create-table-foreign-keys.html) — specifically the "Conditions and Restrictions" section
 2. Ensuring both parent and child tables have the required indexes
 3. Ensuring column definitions match exactly between FK columns
@@ -219,12 +222,12 @@ SELECT COUNT(*) FROM mydb.orders;
 
 Before attempting any recovery, answer these questions:
 
-| Question | Why It Matters |
-|----------|---------------|
-| Is this a production database? | Determines urgency and risk tolerance |
-| Do you have recent backups/snapshots? | Determines recovery options |
-| When did the issue start? | Helps identify the triggering event |
-| What DDL ran before the issue? | Points to root cause |
+| Question                              | Why It Matters                        |
+| ------------------------------------- | ------------------------------------- |
+| Is this a production database?        | Determines urgency and risk tolerance |
+| Do you have recent backups/snapshots? | Determines recovery options           |
+| When did the issue start?             | Helps identify the triggering event   |
+| What DDL ran before the issue?        | Points to root cause                  |
 
 ### Step 3: Protect Your Recovery Options
 
@@ -280,6 +283,7 @@ aws rds restore-db-instance-from-db-snapshot \
 **Option C — Manual Recovery (Advanced, MySQL 5.7 only)**
 
 For orphaned tablespace issues on MySQL 5.7, you may be able to:
+
 1. Identify the orphaned `.ibd` file
 2. Use `ALTER TABLE ... DISCARD TABLESPACE` and `IMPORT TABLESPACE` to reattach
 
@@ -287,27 +291,27 @@ For orphaned tablespace issues on MySQL 5.7, you may be able to:
 
 ## Prevention Checklist
 
-| Practice | Applies To |
-|----------|-----------|
-| Never run structural DDL with `foreign_key_checks = 0` | All versions |
-| Monitor disk space — avoid storage-full during DDL | RDS MySQL especially |
-| Set appropriate `innodb_flush_log_at_trx_commit = 1` | RDS MySQL 5.7 |
-| Set `sync_binlog = 1` if using binlog | RDS MySQL 5.7 |
-| Upgrade to MySQL 8.0 / Aurora v3 for Atomic DDL | All |
-| Test DDL operations in non-production first | All |
-| Maintain adequate backup retention | All |
-| Monitor error logs for early warning signs | All |
+| Practice                                               | Applies To           |
+| ------------------------------------------------------ | -------------------- |
+| Never run structural DDL with `foreign_key_checks = 0` | All versions         |
+| Monitor disk space — avoid storage-full during DDL     | RDS MySQL especially |
+| Set appropriate `innodb_flush_log_at_trx_commit = 1`   | RDS MySQL 5.7        |
+| Set `sync_binlog = 1` if using binlog                  | RDS MySQL 5.7        |
+| Upgrade to MySQL 8.0 / Aurora v3 for Atomic DDL        | All                  |
+| Test DDL operations in non-production first            | All                  |
+| Maintain adequate backup retention                     | All                  |
+| Monitor error logs for early warning signs             | All                  |
 
 ## RDS MySQL vs Aurora MySQL: Key Differences
 
-| Aspect | RDS MySQL | Aurora MySQL |
-|--------|-----------|--------------|
-| Storage crash safety | EBS-based, relies on MySQL crash recovery | Distributed storage with built-in crash safety |
-| DDL crash risk | Higher — storage-level issues more likely | Lower — storage layer is more resilient |
-| `sync_binlog` importance | Critical for durability | Less critical — Aurora handles durability at storage layer |
-| Dictionary inconsistency risk | Standard MySQL risk profile | Slightly lower due to storage architecture |
-| Recovery options | PITR, snapshots, manual tablespace recovery | PITR, snapshots, backtrack (Aurora-specific) |
-| Atomic DDL (8.0) | Supported | Supported (Aurora v3) |
+| Aspect                        | RDS MySQL                                   | Aurora MySQL                                               |
+| ----------------------------- | ------------------------------------------- | ---------------------------------------------------------- |
+| Storage crash safety          | EBS-based, relies on MySQL crash recovery   | Distributed storage with built-in crash safety             |
+| DDL crash risk                | Higher — storage-level issues more likely   | Lower — storage layer is more resilient                    |
+| `sync_binlog` importance      | Critical for durability                     | Less critical — Aurora handles durability at storage layer |
+| Dictionary inconsistency risk | Standard MySQL risk profile                 | Slightly lower due to storage architecture                 |
+| Recovery options              | PITR, snapshots, manual tablespace recovery | PITR, snapshots, backtrack (Aurora-specific)               |
+| Atomic DDL (8.0)              | Supported                                   | Supported (Aurora v3)                                      |
 
 ## Key Takeaways
 
@@ -323,4 +327,4 @@ For orphaned tablespace issues on MySQL 5.7, you may be able to:
 
 ---
 
-*Special thanks to Valter for contributing ideas and review to this article.*
+_Special thanks to Valter for contributing ideas and review to this article._
