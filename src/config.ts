@@ -2,7 +2,7 @@ export const SITE = {
   website: "https://venkinotes.com/",
   author: "Venkatesh Periyathambi",
   profile: "https://venkinotes.com/",
-  desc: "Notes on databases, data, and AI — views and customer problems from the field.",
+  desc: "Notes on databases, data, and AI. Views and customer problems from the field.",
   title: "Venki Notes",
   ogImage: "astropaper-og.jpg",
   lightAndDarkMode: true,
