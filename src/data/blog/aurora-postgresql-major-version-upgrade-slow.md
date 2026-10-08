@@ -293,22 +293,22 @@ _Based on real-world upgrade experiences across multiple PostgreSQL clusters —
 
 ## References
 
-1. PostgreSQL Global Development Group, 'pg_upgrade', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/pgupgrade.html](https://www.postgresql.org/docs/current/pgupgrade.html).
+1. PostgreSQL Global Development Group, ['pg_upgrade'](https://www.postgresql.org/docs/current/pgupgrade.html), _PostgreSQL Documentation_.
 
-2. PostgreSQL Global Development Group, 'pg_upgrade source code (version.c)', _GitHub_, available at: [https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c](https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c).
+2. PostgreSQL Global Development Group, ['pg_upgrade source code (version.c)'](https://github.com/postgres/postgres/blob/master/src/bin/pg_upgrade/pg_upgrade.c), _GitHub_.
 
-3. Amazon Web Services, 'Performing a major version upgrade', _Amazon Aurora User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html).
+3. Amazon Web Services, ['Performing a major version upgrade'](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.MajorVersion.html), _Amazon Aurora User Guide_.
 
-4. Amazon Web Services, 'Upgrading Amazon Aurora PostgreSQL DB clusters', _Amazon Aurora User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html).
+4. Amazon Web Services, ['Upgrading Amazon Aurora PostgreSQL DB clusters'](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_UpgradeDBInstance.PostgreSQL.html), _Amazon Aurora User Guide_.
 
-5. AWS Labs, 'pg-collector', _GitHub_, available at: [https://github.com/awslabs/pg-collector](https://github.com/awslabs/pg-collector).
+5. AWS Labs, ['pg-collector'](https://github.com/awslabs/pg-collector), _GitHub_.
 
-6. Amazon Web Services, 'Minimize downtime for RDS PostgreSQL major version upgrades', _AWS re:Post Knowledge Center_, available at: [https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade](https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade).
+6. Amazon Web Services, ['Minimize downtime for RDS PostgreSQL major version upgrades'](https://repost.aws/knowledge-center/rds-postgresql-optimize-major-upgrade), _AWS re:Post Knowledge Center_.
 
-7. Khera, B., 'Why do large objects lead to slowness or failure of major version upgrades in RDS/Aurora PostgreSQL?', _AWS re:Post_, available at: [https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ](https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ).
+7. Khera, B., ['Why do large objects lead to slowness or failure of major version upgrades in RDS/Aurora PostgreSQL?'](https://repost.aws/articles/AR3nlE9KEgSX6Z0quBt9ENXQ), _AWS re:Post_.
 
-8. Amazon Web Services, 'Managing high object counts in Amazon Aurora PostgreSQL', _Amazon Aurora User Guide_, available at: [https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html).
+8. Amazon Web Services, ['Managing high object counts in Amazon Aurora PostgreSQL'](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/PostgreSQL.HighObjectCount.html), _Amazon Aurora User Guide_.
 
-9. PostgreSQL Global Development Group, 'TOAST (The Oversized-Attribute Storage Technique)', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/storage-toast.html](https://www.postgresql.org/docs/current/storage-toast.html).
+9. PostgreSQL Global Development Group, ['TOAST (The Oversized-Attribute Storage Technique)'](https://www.postgresql.org/docs/current/storage-toast.html), _PostgreSQL Documentation_.
 
-10. PostgreSQL Global Development Group, 'vacuumlo — remove orphaned large objects', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/vacuumlo.html](https://www.postgresql.org/docs/current/vacuumlo.html).
+10. PostgreSQL Global Development Group, ['vacuumlo — remove orphaned large objects'](https://www.postgresql.org/docs/current/vacuumlo.html), _PostgreSQL Documentation_.

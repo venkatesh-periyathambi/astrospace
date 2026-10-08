@@ -406,22 +406,22 @@ The key: **at no point is the table locked for more than milliseconds.** The bac
 
 ## References
 
-1. Oracle Corporation, 'InnoDB Online DDL Operations', _MySQL 8.0 Reference Manual_, available at: [https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html).
+1. Oracle Corporation, ['InnoDB Online DDL Operations'](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html), _MySQL 8.0 Reference Manual_.
 
-2. Oracle Corporation, 'MySQL 8.0: InnoDB now supports Instant ADD/DROP Columns', _MySQL Server Blog_, available at: [https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns](https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns).
+2. Oracle Corporation, ['MySQL 8.0: InnoDB now supports Instant ADD/DROP Columns'](https://blogs.oracle.com/mysql/mysql-80-instant-add-drop-columns), _MySQL Server Blog_.
 
-3. PostgreSQL Global Development Group, 'ALTER TABLE', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/sql-altertable.html](https://www.postgresql.org/docs/current/sql-altertable.html).
+3. PostgreSQL Global Development Group, ['ALTER TABLE'](https://www.postgresql.org/docs/current/sql-altertable.html), _PostgreSQL Documentation_.
 
-4. PostgreSQL Global Development Group, 'Building Indexes Concurrently', _PostgreSQL Documentation_, available at: [https://www.postgresql.org/docs/current/sql-createindex.html](https://www.postgresql.org/docs/current/sql-createindex.html).
+4. PostgreSQL Global Development Group, ['Building Indexes Concurrently'](https://www.postgresql.org/docs/current/sql-createindex.html), _PostgreSQL Documentation_.
 
-5. GitHub, 'gh-ost: GitHub's Online Schema-migration Tool for MySQL', _GitHub_, available at: [https://github.com/github/gh-ost](https://github.com/github/gh-ost).
+5. GitHub, ['gh-ost: GitHub's Online Schema-migration Tool for MySQL'](https://github.com/github/gh-ost), _GitHub_.
 
-6. Percona, 'pt-online-schema-change', _Percona Toolkit Documentation_, available at: [https://docs.percona.com/percona-toolkit/pt-online-schema-change.html](https://docs.percona.com/percona-toolkit/pt-online-schema-change.html).
+6. Percona, ['pt-online-schema-change'](https://docs.percona.com/percona-toolkit/pt-online-schema-change.html), _Percona Toolkit Documentation_.
 
-7. Block Inc., 'Introducing Spirit', _CashApp Code Blog_, available at: [https://code.cash.app/introducing-spirit](https://code.cash.app/introducing-spirit).
+7. Block Inc., ['Introducing Spirit'](https://code.cash.app/introducing-spirit), _CashApp Code Blog_.
 
-8. pg_repack Development Team, 'pg_repack — Reorganize tables in PostgreSQL databases with minimal locks', _GitHub_, available at: [https://github.com/reorg/pg_repack](https://github.com/reorg/pg_repack).
+8. pg*repack Development Team, ['pg_repack — Reorganize tables in PostgreSQL databases with minimal locks'](https://github.com/reorg/pg_repack), \_GitHub*.
 
-9. Xata, 'pgroll: Zero-downtime, reversible, schema migrations for PostgreSQL', _GitHub_, available at: [https://github.com/xataio/pgroll](https://github.com/xataio/pgroll).
+9. Xata, ['pgroll: Zero-downtime, reversible, schema migrations for PostgreSQL'](https://github.com/xataio/pgroll), _GitHub_.
 
-10. Nikolay Samokhvalov, 'Zero-downtime Postgres schema migrations need this: lock_timeout and retries', _postgres.ai_, available at: [https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries).
+10. Nikolay Samokhvalov, ['Zero-downtime Postgres schema migrations need this: lock_timeout and retries'](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries), _postgres.ai_.

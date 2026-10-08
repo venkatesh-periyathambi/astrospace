@@ -189,20 +189,20 @@ It's arithmetic. Small models are 10 to 60 times cheaper per token, so if you ca
 
 ## References
 
-1. Anthropic, 'Define success criteria and build evaluations', _Claude Platform Docs_, available at: [https://docs.claude.com/en/docs/test-and-evaluate/develop-tests](https://docs.claude.com/en/docs/test-and-evaluate/develop-tests).
+1. Anthropic, ['Define success criteria and build evaluations'](https://docs.claude.com/en/docs/test-and-evaluate/develop-tests), _Claude Platform Docs_.
 
-2. H. Husain, 'Your AI Product Needs Evals', _Hamel's Blog_, available at: [https://hamel.dev/blog/posts/evals/](https://hamel.dev/blog/posts/evals/).
+2. H. Husain, ['Your AI Product Needs Evals'](https://hamel.dev/blog/posts/evals/), _Hamel's Blog_.
 
-3. OpenAI, 'Evaluating model performance', _OpenAI Platform Documentation_, available at: [https://platform.openai.com/docs/guides/evals](https://platform.openai.com/docs/guides/evals).
+3. OpenAI, ['Evaluating model performance'](https://platform.openai.com/docs/guides/evals), _OpenAI Platform Documentation_.
 
-4. I. Ong et al., 'RouteLLM: Learning to Route LLMs with Preference Data', arXiv:2406.18665, available at: [https://arxiv.org/abs/2406.18665](https://arxiv.org/abs/2406.18665).
+4. I. Ong et al., ['RouteLLM: Learning to Route LLMs with Preference Data'](https://arxiv.org/abs/2406.18665), arXiv:2406.18665.
 
-5. Amazon Web Services, 'Understanding intelligent prompt routing in Amazon Bedrock', _Amazon Bedrock User Guide_, available at: [https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html).
+5. Amazon Web Services, ['Understanding intelligent prompt routing in Amazon Bedrock'](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-routing.html), _Amazon Bedrock User Guide_.
 
-6. Anthropic, 'Prompt caching', _Claude Platform Docs_, available at: [https://docs.claude.com/en/docs/build-with-claude/prompt-caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching).
+6. Anthropic, ['Prompt caching'](https://docs.claude.com/en/docs/build-with-claude/prompt-caching), _Claude Platform Docs_.
 
-7. Google Cloud, 'Context caching overview', _Vertex AI Generative AI Documentation_, available at: [https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview](https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview).
+7. Google Cloud, ['Context caching overview'](https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview), _Vertex AI Generative AI Documentation_.
 
-8. G. Hinton, O. Vinyals and J. Dean, 'Distilling the Knowledge in a Neural Network', arXiv:1503.02531, available at: [https://arxiv.org/abs/1503.02531](https://arxiv.org/abs/1503.02531).
+8. G. Hinton, O. Vinyals and J. Dean, ['Distilling the Knowledge in a Neural Network'](https://arxiv.org/abs/1503.02531), arXiv:1503.02531.
 
-9. N. Shazeer et al., 'Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer', arXiv:1701.06538, available at: [https://arxiv.org/abs/1701.06538](https://arxiv.org/abs/1701.06538).
+9. N. Shazeer et al., ['Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer'](https://arxiv.org/abs/1701.06538), arXiv:1701.06538.
