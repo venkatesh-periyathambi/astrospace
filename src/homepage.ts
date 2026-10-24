@@ -57,4 +57,13 @@ export const SERIES: {
       "rag-retrieval-nondeterminism-fixes",
     ],
   },
+  {
+    title: "Zero-Downtime Multi-TB Migrations",
+    description:
+      "Moving 12 TB from PostgreSQL 11 on-prem to a managed PostgreSQL 16 with five-minute write pauses: planning the waves, then running them.",
+    posts: [
+      "zero-downtime-migrations-strategy",
+      "zero-downtime-migrations-execution",
+    ],
+  },
 ];
