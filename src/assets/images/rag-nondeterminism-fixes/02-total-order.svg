@@ -39,7 +39,7 @@
     <text x="490" y="214" font-size="12.5" font-weight="700" fill="#1864ab">A, B, C</text>
 
     <text x="190" y="268" text-anchor="middle" font-size="11.5" font-weight="700" fill="#c92a2a">order is hostage to the noise floor</text>
-    <text x="530" y="268" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1864ab">order cannot move below the step</text>
+    <text x="530" y="268" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1864ab">flips only at a rounding edge</text>
     <text x="360" y="298" text-anchor="middle" font-size="11" fill="#495057">Round to just above your measured noise floor, then break ties on an immutable ID.</text>
   </g>
 </svg>
